@@ -6,7 +6,7 @@ using System.ComponentModel;
 using System.Numerics;
 
 
-namespace VickreyAuction
+namespace NEO
 {
     public class VickreyAuction : SmartContract
     {

@@ -22,7 +22,8 @@ using System;
 //public static event transfer(byte[] from, byte[] to, BigInteger amount)
 
 
-namespace Test {
+namespace NEO
+{
 
   public class Contract1 : SmartContract {
 

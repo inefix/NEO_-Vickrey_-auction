@@ -5,9 +5,9 @@ using System;
 using System.ComponentModel;
 using System.Numerics;
 
-namespace Neo.SmartContract
+namespace NEO
 {
-    public class ICO_Template : Framework.SmartContract
+    public class ICO_Template : SmartContract
     {
         //Token Settings
         public static string Name() => "Test";

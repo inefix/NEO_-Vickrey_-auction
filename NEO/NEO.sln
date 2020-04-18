@@ -1,0 +1,17 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NEO", "NEO\NEO.csproj", "{F5710F93-27C8-4E97-8F33-B239E6C65FD2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F5710F93-27C8-4E97-8F33-B239E6C65FD2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F5710F93-27C8-4E97-8F33-B239E6C65FD2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F5710F93-27C8-4E97-8F33-B239E6C65FD2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F5710F93-27C8-4E97-8F33-B239E6C65FD2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
