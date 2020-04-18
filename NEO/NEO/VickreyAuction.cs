@@ -4,6 +4,7 @@ using Neo.SmartContract.Framework.Services.System;
 using System;
 using System.ComponentModel;
 using System.Numerics;
+using System.Text;
 
 namespace NEO
 {
@@ -44,9 +45,9 @@ namespace NEO
 
                 if (method == "Transfer") return Transfer((byte[])args[0], (byte[])args[1], (BigInteger)args[2]);
 
-                if (method == "Init") return Init((int)args[1], (int)args[2], (int)args[3]);
+                if (method == "Init") return Init((int)args[0], (int)args[1], (int)args[2], (int)args[3]);
 
-                if (method == "Bid") return Bid((string)args[0], (int)args[1]);
+                if (method == "Bid") return Bid((byte[])args[0], (string)args[1], (int)args[2]);
 
                 if (method == "Claim") return Claim();
 
@@ -104,9 +105,13 @@ namespace NEO
 
         //VICKREY METHODS
         //I SET ALL METHODS TO VOID FOR THE MOMENT
-        private static bool Init(int reservePrice, int biddingPeriod, int revealingPeriod)
+        private static bool Init(int amount, int reservePrice, int biddingPeriod, int revealingPeriod)
         {
             if (!Runtime.CheckWitness(Owner)) return false;
+
+            Transferred(Owner, null, amount);
+
+            Storage.Put(Storage.CurrentContext, "amount", amount);
             Storage.Put(Storage.CurrentContext, "reservePrice", reservePrice);
             uint now = Runtime.Time;
             int endOfBidding = (int)now + biddingPeriod;
@@ -123,23 +128,43 @@ namespace NEO
             Storage.Put(Storage.CurrentContext, "highBid", highBid);
             Storage.Put(Storage.CurrentContext, "secondBid", secondBid);
             StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
-            revealed.Put(Owner, "true");     //bool boolValueBack = BitConverter.ToBoolean(bytes, 0);
+            revealed.Put(Owner, BoolToBytes(true));     //bool boolValueBack = BitConverter.ToBoolean(bytes, 0);
             return true;
 
         }
 
-        private static string Bid(string hash, int nonce)
+        private static bool Bid(byte[] account, string hash, int nonce)
         {
-            //TODO
-            return "";
+            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
+            StorageMap hashedBidOf = Storage.CurrentContext.CreateMap(nameof(hashedBidOf));
+
+            if (Runtime.CheckWitness(Owner)) return false;
+
+            byte[] endOfBidding = Storage.Get(Storage.CurrentContext, "endOfBidding");
+
+            if (Runtime.Time < (uint)BytesToBigInteger(endOfBidding))
+            {
+                hashedBidOf.Put(account, hash);
+            }
+
+            return true;
         }
 
-        private static string Claim()
+        private static bool Claim()
         {
             //TODO
-            if (!Runtime.CheckWitness(Owner)) return "false";
+            byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
+            byte[] highBidder = Storage.Get(Storage.CurrentContext, "highBidder");
+            byte[] amount = Storage.Get(Storage.CurrentContext, "amount");
 
-            return "hello";
+            if (!Runtime.CheckWitness(highBidder)) return false;
+
+            if (Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing))
+            {
+                Transferred(null, highBidder, (int)BytesToBigInteger(amount));
+            }
+
+            return true;
         }
 
         public static bool Transfer(byte[] from, byte[] to, BigInteger value)
@@ -172,5 +197,11 @@ namespace NEO
             //TODO
             return "";
         }
+
+        private static string BytesToString(byte[] data) => data.AsString();
+
+        private static byte[] BoolToBytes(bool val) => val ? (new byte[1] { 1 }) : (new byte[1] { 0 });
+
+        private static BigInteger BytesToBigInteger(byte[] data) => data.AsBigInteger();
     }
 }
