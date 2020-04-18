@@ -1,15 +1,14 @@
 ﻿<Properties>
-  <MonoDevelop.Ide.Workbench ActiveDocument="NEO/ICO_Template.cs">
+  <MonoDevelop.Ide.Workbench ActiveDocument="NEO/VickreyAuction.cs">
     <Files>
-      <File FileName="NEO/ICO_Template.cs" Line="10" Column="33" />
-      <File FileName="NEO/VickreyAuction.cs" Line="11" Column="34" />
+      <File FileName="NEO/VickreyAuction.cs" Line="1" Column="1" />
     </Files>
     <Pads>
       <Pad Id="ProjectPad">
         <State name="__root__">
           <Node name="NEO" expanded="True">
             <Node name="NEO" expanded="True">
-              <Node name="ICO_Template.cs" selected="True" />
+              <Node name="VickreyAuction.cs" selected="True" />
             </Node>
           </Node>
         </State>
@@ -18,7 +17,6 @@
   </MonoDevelop.Ide.Workbench>
   <MonoDevelop.Ide.DebuggingService.PinnedWatches />
   <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" />
-  <MonoDevelop.Ide.ItemProperties.NEO FirstBuild="True" />
   <MonoDevelop.Ide.DebuggingService.Breakpoints>
     <BreakpointStore />
   </MonoDevelop.Ide.DebuggingService.Breakpoints>

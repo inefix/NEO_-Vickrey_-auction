@@ -1,0 +1,3 @@
+/Users/Andrea/Desktop/NEO_-Vickrey_-auction/NEO/NEO/obj/Debug/netstandard2.0/NEO.csprojAssemblyReference.cache
+/Users/Andrea/Desktop/NEO_-Vickrey_-auction/NEO/NEO/obj/Debug/netstandard2.0/NEO.AssemblyInfoInputs.cache
+/Users/Andrea/Desktop/NEO_-Vickrey_-auction/NEO/NEO/obj/Debug/netstandard2.0/NEO.AssemblyInfo.cs
