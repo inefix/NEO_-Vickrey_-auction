@@ -137,6 +137,8 @@ namespace NEO
         {
             StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
             StorageMap hashedBidOf = Storage.CurrentContext.CreateMap(nameof(hashedBidOf));
+            StorageMap nonceOf = Storage.CurrentContext.CreateMap(nameof(nonceOf));
+            nonceOf.Put(account, nonce);
 
             if (Runtime.CheckWitness(Owner)) return false;
 
