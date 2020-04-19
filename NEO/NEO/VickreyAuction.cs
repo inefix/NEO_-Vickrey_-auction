@@ -5,19 +5,32 @@ using System;
 using System.ComponentModel;
 using System.Numerics;
 using System.Text;
+using System.Security.Cryptography;
 
 namespace NEO
 {
     public class VickreyAuction : SmartContract
     {
-        [DisplayName("transfer")]
-        public static event Action<byte[], byte[], BigInteger> Transferred;
-
         private static readonly byte[] Owner = "AK2nJJpJr6o664CWJKi1QRXjqeic2zRp8y".ToScriptHash(); //Owner Address
         private static readonly BigInteger TotalSupplyValue = 10000000000000000;
 
         private static readonly byte[] neo_asset_id = { 155, 124, 255, 218, 166, 116, 190, 174, 15, 147, 14, 190, 96, 133, 175, 144, 147, 229, 254, 86, 179, 74, 92, 34, 12, 205, 207, 110, 252, 51, 111, 197 };
         private static readonly byte[] gas_asset_id = { 231, 45, 40, 105, 121, 238, 108, 177, 183, 230, 93, 253, 223, 178, 227, 132, 16, 11, 141, 20, 142, 119, 88, 222, 66, 228, 22, 139, 113, 121, 44, 96 };
+
+        [DisplayName("name")]
+        public static string Name() => "VA"; //name of the token
+
+        [DisplayName("symbol")]
+        public static string Symbol() => "VA"; //symbol of the token
+
+        [DisplayName("decimals")]
+        public static byte Decimals() => 8;
+
+        [DisplayName("supportedStandards")]
+        public static string[] SupportedStandards() => new string[] { "NEP-5", "NEP-7", "NEP-10" };
+
+        [DisplayName("transfer")]
+        public static event Action<byte[], byte[], BigInteger> Transferred;
 
         public static object Main(string method, object[] args)
         {
@@ -47,7 +60,7 @@ namespace NEO
 
                 if (method == "Init") return Init((int)args[0], (int)args[1], (int)args[2], (int)args[3]);
 
-                if (method == "Bid") return Bid((byte[])args[0], (string)args[1], (int)args[2]);
+                if (method == "Bid") return Bid((byte[])args[0], (string)args[1]);
 
                 if (method == "Claim") return Claim();
 
@@ -66,13 +79,12 @@ namespace NEO
             StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
             return asset.Get(account).AsBigInteger();
         }
-        [DisplayName("decimals")]
-        public static byte Decimals() => 8;
 
-        private static bool IsPayable(byte[] to)
+        [DisplayName("totalSupply")]
+        public static BigInteger TotalSupply()
         {
-            var c = Blockchain.GetContract(to);
-            return c == null || c.IsPayable;
+            StorageMap contract = Storage.CurrentContext.CreateMap(nameof(contract));
+            return contract.Get("totalSupply").AsBigInteger();
         }
 
         [DisplayName("deploy")]
@@ -87,24 +99,6 @@ namespace NEO
             return true;
         }
 
-        [DisplayName("name")]
-        public static string Name() => "VA"; //name of the token
-
-        [DisplayName("symbol")]
-        public static string Symbol() => "VA"; //symbol of the token
-
-        [DisplayName("supportedStandards")]
-        public static string[] SupportedStandards() => new string[] { "NEP-5", "NEP-7", "NEP-10" };
-
-        [DisplayName("totalSupply")]
-        public static BigInteger TotalSupply()
-        {
-            StorageMap contract = Storage.CurrentContext.CreateMap(nameof(contract));
-            return contract.Get("totalSupply").AsBigInteger();
-        }
-
-        //VICKREY METHODS
-        //I SET ALL METHODS TO VOID FOR THE MOMENT
         private static bool Init(int amount, int reservePrice, int biddingPeriod, int revealingPeriod)
         {
             if (!Runtime.CheckWitness(Owner)) return false;
@@ -133,12 +127,29 @@ namespace NEO
 
         }
 
-        private static bool Bid(byte[] account, string hash, int nonce)
+        private static bool BidNonce(byte[] account, string hash, int nonce)
         {
             StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
             StorageMap hashedBidOf = Storage.CurrentContext.CreateMap(nameof(hashedBidOf));
             StorageMap nonceOf = Storage.CurrentContext.CreateMap(nameof(nonceOf));
             nonceOf.Put(account, nonce);
+
+            if (Runtime.CheckWitness(Owner)) return false;
+
+            byte[] endOfBidding = Storage.Get(Storage.CurrentContext, "endOfBidding");
+
+            if (Runtime.Time < (uint)BytesToBigInteger(endOfBidding))
+            {
+                hashedBidOf.Put(account, hash);
+            }
+
+            return true;
+        }
+
+        private static bool Bid(byte[] account, string hash)
+        {
+            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
+            StorageMap hashedBidOf = Storage.CurrentContext.CreateMap(nameof(hashedBidOf));
 
             if (Runtime.CheckWitness(Owner)) return false;
 
@@ -188,10 +199,19 @@ namespace NEO
             return true;
         }
 
-        private static string Reveal(int amount, int nonce)
+        private static bool Reveal(int amount, int nonce)
         {
-            //TODO
-            return "";
+            //check timing
+            byte[] endOfBidding = Storage.Get(Storage.CurrentContext, "endOfBidding");
+            byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
+            if((Runtime.Time < (uint) BytesToBigInteger(endOfBidding) || Runtime.Time >= (uint) BytesToBigInteger(endOfRevealing)) return false;
+
+            //hash amount and nonce
+            
+            StorageMap nonceOf = Storage.CurrentContext.CreateMap(nameof(nonceOf));
+            nonceOf.Get(account).AsBigInteger();
+
+            return true;
         }
 
         private static string Withdraw()
@@ -200,10 +220,47 @@ namespace NEO
             return "";
         }
 
+        private static bool IsPayable(byte[] to)
+        {
+            var c = Blockchain.GetContract(to);
+            return c == null || c.IsPayable;
+        }
+
         private static string BytesToString(byte[] data) => data.AsString();
 
         private static byte[] BoolToBytes(bool val) => val ? (new byte[1] { 1 }) : (new byte[1] { 0 });
 
         private static BigInteger BytesToBigInteger(byte[] data) => data.AsBigInteger();
+
+        private static byte[] GenerateHash(byte[] amount, byte[] nonce)
+        {
+            HashAlgorithm algorithm = new SHA256Managed();
+
+            byte[] plainTextWithSaltBytes = 
+                new byte[amount.Length + nonce.Length];
+
+            for (int i = 0; i < amount.Length; i++)
+            {
+                plainTextWithSaltBytes[i] = amount[i];
+            }
+            for (int i = 0; i < salt.Length; i++)
+            {
+                plainTextWithSaltBytes[plainText.Length + i] = nonce[i];
+            }
+
+            return algorithm.ComputeHash(plainTextWithSaltBytes);            
+        }
+
+        public static bool CompareByteArrays(byte[] array1, byte[] array2)
+        {
+            if (array1.Length != array2.Length) return false;
+
+            for (int i = 0; i < array1.Length; i++)
+            {
+                if (array1[i] != array2[i]) return false;
+            }
+
+            return true;
+        }  
     }
 }
