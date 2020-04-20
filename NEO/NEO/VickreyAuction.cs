@@ -60,7 +60,7 @@ namespace NEO
 
                 if (method == "Init") return Init((int)args[0], (int)args[1], (int)args[2], (int)args[3]);
 
-                if (method == "Bid") return Bid((byte[])args[0], (string)args[1]);
+                if (method == "Bid") return Bid((string)args[0]);
 
                 if (method == "Claim") return Claim();
 
@@ -95,7 +95,7 @@ namespace NEO
             contract.Put("totalSupply", TotalSupplyValue);
             StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
             asset.Put(Owner, TotalSupplyValue);
-            Transferred(null, Owner, TotalSupplyValue);
+            //Transferred(null, Owner, TotalSupplyValue);  //not transfer the coin to the owner since it will be sell
             return true;
         }
 
@@ -146,21 +146,43 @@ namespace NEO
             return true;
         }
 
-        private static bool Bid(byte[] account, string hash)
+        private static ulong Bid(string hash)
         {
-            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
+            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));     //bider can bid multiple times
             StorageMap hashedBidOf = Storage.CurrentContext.CreateMap(nameof(hashedBidOf));
 
-            if (Runtime.CheckWitness(Owner)) return false;
+            if (Runtime.CheckWitness(Owner)) return 0;
 
             byte[] endOfBidding = Storage.Get(Storage.CurrentContext, "endOfBidding");
 
+            ulong value = 0;
+
             if (Runtime.Time < (uint)BytesToBigInteger(endOfBidding))
             {
-                hashedBidOf.Put(account, hash);
+                //store the amount of neo sent
+                Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
+                TransactionOutput reference = tx.GetReferences()[0];
+                if (reference.AssetId != neo_asset_id) return 0;          //accept NEO
+                //if (reference.AssetId != gas_asset_id) return 0;        //accept GAS
+                byte[] sender = reference.ScriptHash;
+                byte[] receiver = ExecutionEngine.ExecutingScriptHash;
+                
+                TransactionOutput[] outputs = tx.GetOutputs();
+                // get the total amount of Neo
+                foreach (TransactionOutput output in outputs)
+                {
+                    if (output.ScriptHash == receiver)
+                    {
+                        value += (ulong)output.Value;
+                    }
+                }
+                balanceOf.Put(sender, value);
+
+                //store the hash
+                hashedBidOf.Put(sender, hash);
             }
 
-            return true;
+            return value;
         }
 
         private static bool Claim()
@@ -180,6 +202,7 @@ namespace NEO
             return true;
         }
 
+        //not necessary in my opinion
         public static bool Transfer(byte[] from, byte[] to, BigInteger value)
         {
             if (value <= 0) return false;
@@ -204,10 +227,10 @@ namespace NEO
             //check timing
             byte[] endOfBidding = Storage.Get(Storage.CurrentContext, "endOfBidding");
             byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
-            if((Runtime.Time < (uint) BytesToBigInteger(endOfBidding) || Runtime.Time >= (uint) BytesToBigInteger(endOfRevealing)) return false;
+            if(Runtime.Time < (uint)BytesToBigInteger(endOfBidding) || Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing)) return false;
 
             //hash amount and nonce
-            
+
             StorageMap nonceOf = Storage.CurrentContext.CreateMap(nameof(nonceOf));
             nonceOf.Get(account).AsBigInteger();
 
@@ -236,7 +259,7 @@ namespace NEO
         {
             HashAlgorithm algorithm = new SHA256Managed();
 
-            byte[] plainTextWithSaltBytes = 
+            byte[] plainTextWithSaltBytes =
                 new byte[amount.Length + nonce.Length];
 
             for (int i = 0; i < amount.Length; i++)
@@ -248,7 +271,7 @@ namespace NEO
                 plainTextWithSaltBytes[plainText.Length + i] = nonce[i];
             }
 
-            return algorithm.ComputeHash(plainTextWithSaltBytes);            
+            return algorithm.ComputeHash(plainTextWithSaltBytes);
         }
 
         public static bool CompareByteArrays(byte[] array1, byte[] array2)
@@ -261,6 +284,6 @@ namespace NEO
             }
 
             return true;
-        }  
+        }
     }
 }

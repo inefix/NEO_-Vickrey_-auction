@@ -21,6 +21,9 @@ using System;
 
 //public static event transfer(byte[] from, byte[] to, BigInteger amount)
 
+//StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
+//BigInteger balance = asset.Get(sender).AsBigInteger();
+
 
 namespace NEO
 {
@@ -49,7 +52,7 @@ namespace NEO
                             return Delete((string)args[0]);
                     default:
                             return false;
-                    } 
+                    }
             }
 
 
