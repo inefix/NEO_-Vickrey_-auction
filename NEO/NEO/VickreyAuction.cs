@@ -248,10 +248,17 @@ namespace NEO
             return true;
         }
 
-        private static string Withdraw()
+        private static bool Withdraw()
         {
-            //TODO
-            return "";
+            //check endOfRevealing
+            byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
+            if(Runtime.Time < (uint)BytesToBigInteger(endOfRevealing)) return false;
+
+            //check caller has revealed his bid
+
+            //transfer money
+            
+            return true;
         }
 
         private static bool IsPayable(byte[] to)
