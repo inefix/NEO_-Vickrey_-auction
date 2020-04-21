@@ -197,9 +197,12 @@ namespace NEO
             if (Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing))
             {
                 Transferred(null, highBidder, (int)BytesToBigInteger(amount));
+                return true;
+
             }
 
-            return true;
+            return false;
+
         }
 
         //not necessary in my opinion
@@ -230,9 +233,17 @@ namespace NEO
             if(Runtime.Time < (uint)BytesToBigInteger(endOfBidding) || Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing)) return false;
 
             //hash amount and nonce
+            byte[] generatedHash = GenerateHash(BitConverter.GetBytes(amount), BitConverter.GetBytes(nonce))
+            
+            //Get sender from hash
+            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));    
+            StorageMap hashedBidOf = Storage.CurrentContext.CreateMap(nameof(hashedBidOf));
 
-            StorageMap nonceOf = Storage.CurrentContext.CreateMap(nameof(nonceOf));
-            nonceOf.Get(account).AsBigInteger();
+            //Check sender balance of > amout bid
+
+            //update the highest and second highest bids
+
+            //block amount equal to 2nd highest bid
 
             return true;
         }
