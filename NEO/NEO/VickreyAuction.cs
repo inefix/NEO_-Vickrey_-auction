@@ -40,8 +40,6 @@ namespace NEO
             }
             else if (Runtime.Trigger == TriggerType.Application)
             {
-                var callscript = ExecutionEngine.CallingScriptHash;
-
                 if (method == "BalanceOf") return BalanceOf((byte[])args[0]);
 
                 if (method == "Decimals") return Decimals();
@@ -67,6 +65,10 @@ namespace NEO
                 if (method == "Reveal") return Reveal((int)args[0], (int)args[1]);
 
                 if (method == "Withdraw") return Withdraw();
+
+                if (method =="GetReceiver") return GetReceiver();
+
+                if (method =="GetSender") return GetSender();
             }
             return false;
         }
@@ -225,39 +227,79 @@ namespace NEO
             return true;
         }
 
-        private static bool Reveal(int amount, int nonce)
+        private static bool Reveal(int nonce)
         {
-            //check timing
+            //Check time period
             byte[] endOfBidding = Storage.Get(Storage.CurrentContext, "endOfBidding");
             byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
             if(Runtime.Time < (uint)BytesToBigInteger(endOfBidding) || Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing)) return false;
-
-            //hash amount and nonce
-            byte[] generatedHash = GenerateHash(BitConverter.GetBytes(amount), BitConverter.GetBytes(nonce));
             
-            //Get sender from hash
+
+            //TODO : ??? BALANCE OF SENDER > AMOUNT (NOT SURE IF NEEDED) ???
             StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));    
             StorageMap hashedBidOf = Storage.CurrentContext.CreateMap(nameof(hashedBidOf));
 
-            //Check sender balance of > amout bid
+            //store the amount of neo sent
+            ulong value = 0
+            Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
+            TransactionOutput reference = tx.GetReferences()[0];
+            if (reference.AssetId != neo_asset_id) return 0;          //accept NEO
+            //if (reference.AssetId != gas_asset_id) return 0;        //accept GAS
+            byte[] sender = reference.ScriptHash;
+            byte[] receiver = ExecutionEngine.ExecutingScriptHash;
+            
+            TransactionOutput[] outputs = tx.GetOutputs();
+            // get the total amount of Neo
+            foreach (TransactionOutput output in outputs)
+            {
+                if (output.ScriptHash == receiver)
+                {
+                    value += (ulong)output.Value;
+                }
+            }
+            balanceOf.Put(sender, value);
 
-            //update the highest and second highest bids
+            //Add sender to revealed
+            StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
+            revealed.Put(sender, BoolToBytes(true));
 
-            //block amount equal to 2nd highest bid
+            //check highest bid
+            BigInteger highBid = Storage.Get(Storage.CurrentContext, "highBid").AsBigInteger();
+            BigInteger secondBid = Storage.Get(Storage.CurrentContext, "secondBid").AsBigInteger();
+            //check if highest bid
+            if(value > (ulong) highBid){
+                //refund previous higher
+
+                //update highest and second highest
+                Storage.Put(Storage.CurrentContext, "secondBid", highBid);
+                Storage.Put(Storage.CurrentContext, "highBid", value);
+                Storage.Put(Storage.CurrentContext, "highBidder", sender);
+
+                //transfer the money
+            } else if (value > (ulong) secondBid){
+                //in programtheblockchain they refund something not really sure why
+
+                //update second bid
+                Storage.Put(Storage.CurrentContext, "secondBid", value);
+            }
 
             return true;
         }
 
         private static bool Withdraw()
         {
-            //check endOfRevealing
+            //check timing period
             byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
             if(Runtime.Time < (uint)BytesToBigInteger(endOfRevealing)) return false;
 
             //check caller has revealed his bid
+            byte[] caller = GetCaller();
+            StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
+            if (!revealed.Get(caller).AsBool()) return false;
 
-            //transfer money
-            
+            //transfer money from owner to caller
+            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));    
+            transfer(Owner, caller, balanceOf.Get(caller).AsBigInteger());
             return true;
         }
 
@@ -273,26 +315,26 @@ namespace NEO
 
         private static BigInteger BytesToBigInteger(byte[] data) => data.AsBigInteger();
 
-        private static byte[] GenerateHash(byte[] amount, byte[] nonce)
-        {
-            HashAlgorithm algorithm = new SHA256Managed();
+        // private static byte[] GenerateHash(byte[] amount, byte[] nonce)
+        // {
+        //     HashAlgorithm algorithm = new SHA256Managed();
 
-            byte[] plainTextWithSaltBytes =
-                new byte[amount.Length + nonce.Length];
+        //     byte[] plainTextWithSaltBytes =
+        //         new byte[amount.Length + nonce.Length];
 
-            for (int i = 0; i < amount.Length; i++)
-            {
-                plainTextWithSaltBytes[i] = amount[i];
-            }
-            for (int i = 0; i < nonce.Length; i++)
-            {
-                plainTextWithSaltBytes[amount.Length + i] = nonce[i];
-            }
+        //     for (int i = 0; i < amount.Length; i++)
+        //     {
+        //         plainTextWithSaltBytes[i] = amount[i];
+        //     }
+        //     for (int i = 0; i < nonce.Length; i++)
+        //     {
+        //         plainTextWithSaltBytes[amount.Length + i] = nonce[i];
+        //     }
 
-            return algorithm.ComputeHash(plainTextWithSaltBytes);
-        }
+        //     return algorithm.ComputeHash(plainTextWithSaltBytes);
+        // }
 
-        public static bool CompareByteArrays(byte[] array1, byte[] array2)
+        private static bool CompareByteArrays(byte[] array1, byte[] array2)
         {
             if (array1.Length != array2.Length) return false;
 
@@ -302,6 +344,29 @@ namespace NEO
             }
 
             return true;
+        }
+
+        [DisplayName("getReceiver")]  
+        public static byte[] GetReceiver()
+        {
+            return ExecutionEngine.ExecutingScriptHash;
+        }
+
+        [DisplayName("getCaller")]  
+        public static byte[] GetCaller(){
+            return ExecutionEngine.CallingScriptHash;
+        }
+
+        [DisplayName("getSender")]
+        public static byte[] GetSender(){
+            Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
+            TransactionOutput[] reference = tx.GetReferences();
+            // you can choice refund or not refund
+            foreach (TransactionOutput output in reference)
+            {
+                if (output.AssetId == neo_asset_id) return output.ScriptHash;
+            }
+            return new byte[10]{0x20};
         }
     }
 }
