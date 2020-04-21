@@ -62,7 +62,7 @@ namespace NEO
 
                 if (method == "Claim") return Claim();
 
-                if (method == "Reveal") return Reveal((int)args[0], (int)args[1]);
+                if (method == "Reveal") return Reveal((int)args[0]);
 
                 if (method == "Withdraw") return Withdraw();
 
@@ -240,10 +240,10 @@ namespace NEO
             StorageMap hashedBidOf = Storage.CurrentContext.CreateMap(nameof(hashedBidOf));
 
             //store the amount of neo sent
-            ulong value = 0
+            ulong value = 0;
             Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
             TransactionOutput reference = tx.GetReferences()[0];
-            if (reference.AssetId != neo_asset_id) return 0;          //accept NEO
+            // if (reference.AssetId != neo_asset_id) return 0;          //accept NEO
             //if (reference.AssetId != gas_asset_id) return 0;        //accept GAS
             byte[] sender = reference.ScriptHash;
             byte[] receiver = ExecutionEngine.ExecutingScriptHash;
@@ -295,11 +295,13 @@ namespace NEO
             //check caller has revealed his bid
             byte[] caller = GetCaller();
             StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
-            if (!revealed.Get(caller).AsBool()) return false;
+
+            //TODO ERROR HERE WITH BITCONVERTER --> NEED TO GET REVEALED VALUE TRUE OR FALSE
+            // if (!BitConverter.ToBoolean((byte[]) revealed.Get(caller), 0)) return false;
 
             //transfer money from owner to caller
             StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));    
-            transfer(Owner, caller, balanceOf.Get(caller).AsBigInteger());
+            Transfer(Owner, caller, balanceOf.Get(caller).AsBigInteger());
             return true;
         }
 
@@ -366,7 +368,7 @@ namespace NEO
             {
                 if (output.AssetId == neo_asset_id) return output.ScriptHash;
             }
-            return new byte[10]{0x20};
+            return new byte[1]{0x20};
         }
     }
 }
