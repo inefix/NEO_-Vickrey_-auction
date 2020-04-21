@@ -233,7 +233,7 @@ namespace NEO
             if(Runtime.Time < (uint)BytesToBigInteger(endOfBidding) || Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing)) return false;
 
             //hash amount and nonce
-            byte[] generatedHash = GenerateHash(BitConverter.GetBytes(amount), BitConverter.GetBytes(nonce))
+            byte[] generatedHash = GenerateHash(BitConverter.GetBytes(amount), BitConverter.GetBytes(nonce));
             
             //Get sender from hash
             StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));    
@@ -284,9 +284,9 @@ namespace NEO
             {
                 plainTextWithSaltBytes[i] = amount[i];
             }
-            for (int i = 0; i < salt.Length; i++)
+            for (int i = 0; i < nonce.Length; i++)
             {
-                plainTextWithSaltBytes[plainText.Length + i] = nonce[i];
+                plainTextWithSaltBytes[amount.Length + i] = nonce[i];
             }
 
             return algorithm.ComputeHash(plainTextWithSaltBytes);
