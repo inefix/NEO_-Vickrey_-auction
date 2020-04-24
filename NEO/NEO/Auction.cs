@@ -37,7 +37,6 @@ public class Auction
 
         this.higherBidder = higherBidder;
         bidders = new List<Bidder>();
-        AddBidder(new Bidder(higherBidder, "HASH")); //SEE IF NEED TO ADD OWNER AS BIDDER
     }
 
     public Auction()
@@ -50,22 +49,22 @@ public class Auction
     {
         bidders[GetBidderIndex(address)].hasRevealed = true;
     }
-    public void AddBidder(Bidder bidder)
+
+    public void SetBiderHash(byte[] address, string hash)
     {
-        int index = GetBidderIndex(bidder.address);
-        if (index == -1)
-        {
-            bidders.Add(bidder);
-        }
-        else
-        {
-            UpdateBidderHash(index, bidder.hash);
-        }
+        bidders[GetBidderIndex(address)].hash = hash;
     }
 
-    private void UpdateBidderHash(int index, string hash)
+    public void SetBiderStake(byte[] address, int stake)
     {
-        bidders[index].hash = hash;
+        bidders[GetBidderIndex(address)].stake = stake;
+    }
+
+    public bool AnnounceBidder(byte[] address)
+    {
+        if (GetBidderIndex(address) != -1) return false;
+        bidders.Add(new Bidder(address));
+        return true;
     }
 
     private int GetBidderIndex(byte[] address)
