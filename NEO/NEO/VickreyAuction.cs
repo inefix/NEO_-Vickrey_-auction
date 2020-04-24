@@ -14,16 +14,16 @@ namespace NEO
     public class VickreyAuction : SmartContract
     {
         private static readonly byte[] Owner = "AK2nJJpJr6o664CWJKi1QRXjqeic2zRp8y".ToScriptHash(); //Owner Address
-        private static readonly BigInteger TotalSupplyValue = 10000000000000000;
+        private static readonly BigInteger TotalSupplyValue = 100000000000;
 
         private static readonly byte[] neo_asset_id = { 155, 124, 255, 218, 166, 116, 190, 174, 15, 147, 14, 190, 96, 133, 175, 144, 147, 229, 254, 86, 179, 74, 92, 34, 12, 205, 207, 110, 252, 51, 111, 197 };
         private static readonly byte[] gas_asset_id = { 231, 45, 40, 105, 121, 238, 108, 177, 183, 230, 93, 253, 223, 178, 227, 132, 16, 11, 141, 20, 142, 119, 88, 222, 66, 228, 22, 139, 113, 121, 44, 96 };
 
         [DisplayName("name")]
-        public static string Name() => "VA"; //name of the token
+        public static string Name() => "VNEO"; //name of the token
 
         [DisplayName("symbol")]
-        public static string Symbol() => "VA"; //symbol of the token
+        public static string Symbol() => "VNEO"; //symbol of the token
 
         [DisplayName("decimals")]
         public static byte Decimals() => 8;
@@ -56,13 +56,15 @@ namespace NEO
 
                 if (method == "TotalSupply") return TotalSupply();
 
-                if (method == "Transfer") return Transfer((byte[])args[0], (byte[])args[1], (BigInteger)args[2]);
+                //if (method == "Transfer") return Transfer((byte[])args[0], (byte[])args[1], (BigInteger)args[2], ExecutionEngine.CallingScriptHash);
 
                 if (method == "Init") return Init((string)args[0], (int)args[1], (int)args[2], (int)args[3]);
 
                 if (method == "Bid") return Bid((byte[])args[0], (string)args[1]);
 
                 if (method == "Claim") return Claim();
+
+                if (method == "Result") return Result();
 
                 if (method == "Reveal") return Reveal((byte[])args[0], (int)args[1], (int)args[2]);
 
@@ -101,7 +103,7 @@ namespace NEO
             contract.Put("totalSupply", TotalSupplyValue);
             StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
             asset.Put(Owner, TotalSupplyValue);
-            //Transferred(null, Owner, TotalSupplyValue);  //not transfer the coin to the owner since it will be sell
+            Transferred(null, Owner, TotalSupplyValue);  //not transfer the coin to the owner since it will be sell
             return true;
         }
 
@@ -142,46 +144,6 @@ namespace NEO
             return true;
         }
 
-        private static bool Claim()
-        {
-            //TODO
-            byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
-            byte[] highBidder = Storage.Get(Storage.CurrentContext, "highBidder");
-            byte[] amount = Storage.Get(Storage.CurrentContext, "amount");
-
-            if (!Runtime.CheckWitness(highBidder)) return false;
-
-            if (Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing))
-            {
-                Transferred(null, highBidder, (int)BytesToBigInteger(amount));
-                return true;
-
-            }
-
-            return false;
-
-        }
-
-        //not necessary in my opinion
-        public static bool Transfer(byte[] from, byte[] to, BigInteger value)
-        {
-            if (value <= 0) return false;
-            if (!Runtime.CheckWitness(from)) return false;
-            if (to.Length != 20) return false;
-
-            BigInteger from_value = Storage.Get(Storage.CurrentContext, from).AsBigInteger();
-            if (from_value < value) return false;
-            if (from == to) return true;
-            if (from_value == value)
-                Storage.Delete(Storage.CurrentContext, from);
-            else
-                Storage.Put(Storage.CurrentContext, from, from_value - value);
-            BigInteger to_value = Storage.Get(Storage.CurrentContext, to).AsBigInteger();
-            Storage.Put(Storage.CurrentContext, to, to_value + value);
-            Transferred(from, to, value);
-            return true;
-        }
-
         private static bool Reveal(byte[] senderAddress, int stake, int nonce)
         {
             //Get auction
@@ -213,7 +175,53 @@ namespace NEO
             }
             Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
 
+            Transferred(senderAddress, null, stake);
+
             return true;
+        }
+
+        private static string Result(byte[] senderAddress)
+        {
+            Auction auction = (Auction)Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
+            uint now = Runtime.Time;
+            if (now < auction.endOfRevealing) return "wait";
+            if (Runtime.CheckWitness(auction.higherBidder))
+            {
+                //create variable to know if highBidder has called result
+                Transferred(auction.higherBidder, Owner, auction.secondBid);
+                return auction.secret;
+            } else
+            {
+                //Transferred(null, senderAddress, stake)
+            }
+            return "true";
+        }
+
+        private static bool End()
+        {
+            if (!Runtime.CheckWitness(Owner)) return false;
+
+            return true;
+        }
+
+        private static bool Claim()
+        {
+            //TODO
+            byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
+            byte[] highBidder = Storage.Get(Storage.CurrentContext, "highBidder");
+            byte[] amount = Storage.Get(Storage.CurrentContext, "amount");
+
+            if (!Runtime.CheckWitness(highBidder)) return false;
+
+            if (Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing))
+            {
+                Transferred(null, highBidder, (int)BytesToBigInteger(amount));
+                return true;
+
+            }
+
+            return false;
+
         }
 
         private static bool Withdraw()
@@ -229,6 +237,38 @@ namespace NEO
             //transfer money from owner to caller
             StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
             Transfer(Owner, caller, balanceOf.Get(caller).AsBigInteger());
+            return true;
+        }
+
+        private static bool Transfer(byte[] from, byte[] to, BigInteger amount, byte[] callscript)
+        {
+            //Check parameters
+            if (from.Length != 20 || to.Length != 20)
+                throw new InvalidOperationException("The parameters from and to SHOULD be 20-byte addresses.");
+            if (amount <= 0)
+                throw new InvalidOperationException("The parameter amount MUST be greater than 0.");
+            if (!IsPayable(to))
+                return false;
+            if (!Runtime.CheckWitness(from) && from.AsBigInteger() != callscript.AsBigInteger())
+                return false;
+            StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
+            var fromAmount = asset.Get(from).AsBigInteger();
+            if (fromAmount < amount)
+                return false;
+            if (from == to)
+                return true;
+
+            //Reduce payer balances
+            if (fromAmount == amount)
+                asset.Delete(from);
+            else
+                asset.Put(from, fromAmount - amount);
+
+            //Increase the payee balance
+            var toAmount = asset.Get(to).AsBigInteger();
+            asset.Put(to, toAmount + amount);
+
+            Transferred(from, to, amount);
             return true;
         }
 
