@@ -14,10 +14,7 @@ namespace NEO
     public class VickreyAuction : SmartContract
     {
         private static readonly byte[] Owner = "AK2nJJpJr6o664CWJKi1QRXjqeic2zRp8y".ToScriptHash(); //Owner Address
-        private static readonly BigInteger TotalSupplyValue = 100000000000;
-
-        private static readonly byte[] neo_asset_id = { 155, 124, 255, 218, 166, 116, 190, 174, 15, 147, 14, 190, 96, 133, 175, 144, 147, 229, 254, 86, 179, 74, 92, 34, 12, 205, 207, 110, 252, 51, 111, 197 };
-        private static readonly byte[] gas_asset_id = { 231, 45, 40, 105, 121, 238, 108, 177, 183, 230, 93, 253, 223, 178, 227, 132, 16, 11, 141, 20, 142, 119, 88, 222, 66, 228, 22, 139, 113, 121, 44, 96 };
+        private static readonly BigInteger TotalSupplyValue = 100000000000;     //1000 VNEO
 
         [DisplayName("name")]
         public static string Name() => "VNEO"; //name of the token
@@ -44,15 +41,15 @@ namespace NEO
             {
                 if (method == "BalanceOf") return BalanceOf((byte[])args[0]);
 
-                if (method == "Decimals") return Decimals();
+                //if (method == "Decimals") return Decimals();
 
                 if (method == "Deploy") return Deploy();
 
-                if (method == "Name") return Name();
+                //if (method == "Name") return Name();
 
-                if (method == "Symbol") return Symbol();
+                //if (method == "Symbol") return Symbol();
 
-                if (method == "SupportedStandards") return SupportedStandards();
+                //if (method == "SupportedStandards") return SupportedStandards();
 
                 if (method == "TotalSupply") return TotalSupply();
 
@@ -64,7 +61,7 @@ namespace NEO
 
                 if (method == "Bid") return Bid((byte[])args[0], (string)args[1]);
 
-                if (method == "Claim") return Claim();
+                //if (method == "Claim") return Claim();
 
                 if (method == "Result") return Result((byte[])args[0]);
 
@@ -72,13 +69,13 @@ namespace NEO
 
                 if (method == "Reveal") return Reveal((byte[])args[0], (int)args[1], (int)args[2]);
 
-                if (method == "Withdraw") return Withdraw();
+                //if (method == "Withdraw") return Withdraw();
 
-                if (method == "GetReceiver") return GetReceiver();
+                //if (method == "GetReceiver") return GetReceiver();
 
-                if (method == "GetSender") return GetSender();
+                //if (method == "GetSender") return GetSender();
 
-                if (method == "GetTime") return GetCurrentTime();
+                //if (method == "GetTime") return GetCurrentTime();
 
                 if (method == "GenerateHash") return GenerateSHA256((int)args[0], (int)args[1]);
             }
@@ -105,32 +102,22 @@ namespace NEO
         public static bool Deploy()
         {
             if (TotalSupply() != 0) return false;
-            StorageMap contract = Storage.CurrentContext.CreateMap(nameof(contract));
-            contract.Put("totalSupply", TotalSupplyValue);
+            Storage.Put("totalSupply", TotalSupplyValue);
             StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
             asset.Put(Owner, TotalSupplyValue);
-            Transferred(null, Owner, TotalSupplyValue);  //not transfer the coin to the owner since it will be sell
+            Transferred(null, Owner, TotalSupplyValue);
             return true;
         }
 
-        [DisplayName("getTime")]
-        public static BigInteger GetCurrentTime()
-        {
-            return (BigInteger)Runtime.Time;
-        }
-
-        private static bool Init(string secret, BigInteger reservePrice, int durationBidding, int durationReveal, int durationResluting)
+        private static bool Init(string secret, BigInteger reservePrice, int durationBidding, int durationReveal, int durationResulting)
         {
             if (!Runtime.CheckWitness(Owner)) return false;
 
             //Auction
-            Auction auction = new Auction(secret, Runtime.Time, durationBidding, durationReveal, durationResluting, reservePrice, Owner);
+            Auction auction = new Auction(secret, Runtime.Time, durationBidding, durationReveal, durationResulting, reservePrice, Owner);
 
             Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
-            //StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
-            //revealed.Put(Owner, BoolToBytes(true));
             return true;
-
         }
 
         private static bool Announce(byte[] address)
@@ -143,6 +130,7 @@ namespace NEO
             if (!auction.AnnounceBidder(address)) return false;
             Transferred(null, address, 1000);
             Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
+            Storage.Put("totalSupply", BytesToBigInteger(Storage.Get("totalSupply"))+1000);
             return true;
         }
 
@@ -194,8 +182,6 @@ namespace NEO
             }
             Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
 
-            Transferred(senderAddress, null, stake);
-
             return true;
         }
 
@@ -203,7 +189,7 @@ namespace NEO
         {
             Auction auction = (Auction)Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
             uint now = Runtime.Time;
-            if (now < auction.endOfRevealing) return "wait";
+            if (now < auction.endOfRevealing || now >= auction.endOfResulting) return "wait";
             if (Runtime.CheckWitness(auction.higherBidder))
             {
                 //create variable to know if highBidder has called result
@@ -257,12 +243,12 @@ namespace NEO
             if (Runtime.Time < (uint)BytesToBigInteger(endOfRevealing)) return false;
 
             //check caller has revealed his bid
-            byte[] caller = GetCaller();
+            //byte[] caller = GetCaller();
             StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
 
             //transfer money from owner to caller
             StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
-            Transferred(Owner, caller, balanceOf.Get(caller).AsBigInteger());
+            //Transferred(Owner, caller, balanceOf.Get(caller).AsBigInteger());
             return true;
         }
 
@@ -328,6 +314,7 @@ namespace NEO
             }
             return str.ToString();
         }
+
         private static byte[] AppendByteArrays(byte[] array1, byte[] array2)
         {
             byte[] array3 = new byte[array1.Length + array2.Length];
@@ -345,42 +332,6 @@ namespace NEO
             }
 
             return array3;
-        }
-        private static bool CompareByteArrays(byte[] array1, byte[] array2)
-        {
-            if (array1.Length != array2.Length) return false;
-
-            for (int i = 0; i < array1.Length; i++)
-            {
-                if (array1[i] != array2[i]) return false;
-            }
-
-            return true;
-        }
-
-        [DisplayName("getReceiver")]
-        public static byte[] GetReceiver()
-        {
-            return ExecutionEngine.ExecutingScriptHash;
-        }
-
-        [DisplayName("getCaller")]
-        public static byte[] GetCaller()
-        {
-            return ExecutionEngine.CallingScriptHash;
-        }
-
-        [DisplayName("getSender")]
-        public static byte[] GetSender()
-        {
-            Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
-            TransactionOutput[] reference = tx.GetReferences();
-            // you can choice refund or not refund
-            foreach (TransactionOutput output in reference)
-            {
-                if (output.AssetId == neo_asset_id) return output.ScriptHash;
-            }
-            return new byte[1] { 0x20 };
         }
 
         private static byte[] Serialize(object obj)
