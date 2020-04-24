@@ -58,13 +58,13 @@ namespace NEO
 
                 if (method == "Transfer") return Transfer((byte[])args[0], (byte[])args[1], (BigInteger)args[2]);
 
-                if (method == "Init") return Init((int)args[0], (int)args[1], (int)args[2], (int)args[3]);
+                if (method == "Init") return Init((string)args[0], (int)args[1], (int)args[2], (int)args[3]);
 
                 //if (method == "Bid") return Bid((string)args[0]);
 
                 if (method == "Claim") return Claim();
 
-                if (method == "Reveal") return Reveal((int)args[0]);
+                if (method == "Reveal") return Reveal((byte[])args[0], (int)args[1], (int)args[2]);
 
                 if (method == "Withdraw") return Withdraw();
 
@@ -112,15 +112,12 @@ namespace NEO
         }
 
         //IS THE AMOUNT STILL USEFUL ?
-        private static bool Init(int amount, BigInteger reservePrice, int durationBidding, int durationReveal)
+        private static bool Init(string secret, BigInteger reservePrice, int durationBidding, int durationReveal)
         {
             if (!Runtime.CheckWitness(Owner)) return false;
 
-            //Transferred(Owner, null, amount);
-            Transferred(Owner, null, amount);
-
             //Auction
-            Auction auction = new Auction(Runtime.Time, durationBidding, durationReveal, reservePrice, Owner);
+            Auction auction = new Auction(secret, Runtime.Time, durationBidding, durationReveal, reservePrice, Owner);
 
             Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
             //StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
@@ -159,26 +156,7 @@ namespace NEO
             //Store bidder's info
             Bidder bidder = new Bidder(bidderAddress, hash);
             auction.AddBidder(bidder);
-
-            //Store bidder's info
-            //ulong value = 0;
-            //Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
-            //TransactionOutput reference = tx.GetReferences()[0];
-
-            ////if (reference.AssetId != neo_asset_id) return 0;          //accept NEO
-            ////if (reference.AssetId != gas_asset_id) return 0;        //accept GAS
-            //byte[] sender = reference.ScriptHash;
-            //byte[] receiver = ExecutionEngine.ExecutingScriptHash;
-
-            //TransactionOutput[] outputs = tx.GetOutputs();
-            //// get the total amount of Neo
-            //foreach (TransactionOutput output in outputs)
-            //{
-            //    if (output.ScriptHash == receiver)
-            //    {
-            //        value += (ulong)output.Value;
-            //    }
-            //}
+            Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
 
             return true;
         }
@@ -239,58 +217,20 @@ namespace NEO
             string generatedHash = GenerateSHA256String(byteHash);
             if (hash != generatedHash) return false;
 
-           
+            //Confirm reveal of bidder
+            auction.ConfirmReveal(senderAddress);
 
-            //TODO : ??? BALANCE OF SENDER > AMOUNT (NOT SURE IF NEEDED) ???
-            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
-            StorageMap hashedBidOf = Storage.CurrentContext.CreateMap(nameof(hashedBidOf));
-
-            //store the amount of neo sent
-            ulong value = 0;
-            Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
-            TransactionOutput reference = tx.GetReferences()[0];
-            // if (reference.AssetId != neo_asset_id) return 0;          //accept NEO
-            //if (reference.AssetId != gas_asset_id) return 0;        //accept GAS
-            byte[] sender = reference.ScriptHash;
-            byte[] receiver = ExecutionEngine.ExecutingScriptHash;
-
-            TransactionOutput[] outputs = tx.GetOutputs();
-            // get the total amount of Neo
-            foreach (TransactionOutput output in outputs)
+            if (stake > auction.highestBid)
             {
-                if (output.ScriptHash == receiver)
-                {
-                    value += (ulong)output.Value;
-                }
+                auction.secondBid = auction.highestBid;
+                auction.highestBid = stake;
+                auction.higherBidder = senderAddress;
             }
-            balanceOf.Put(sender, value);
-
-            //Add sender to revealed
-            StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
-            revealed.Put(sender, BoolToBytes(true));
-
-            //check highest bid
-            BigInteger highBid = Storage.Get(Storage.CurrentContext, "highBid").AsBigInteger();
-            BigInteger secondBid = Storage.Get(Storage.CurrentContext, "secondBid").AsBigInteger();
-            //check if highest bid
-            if (value > (ulong)highBid)
+            else if (stake > auction.secondBid)
             {
-                //refund previous higher
-
-                //update highest and second highest
-                Storage.Put(Storage.CurrentContext, "secondBid", highBid);
-                Storage.Put(Storage.CurrentContext, "highBid", value);
-                Storage.Put(Storage.CurrentContext, "highBidder", sender);
-
-                //transfer the money
+                auction.secondBid = stake;
             }
-            else if (value > (ulong)secondBid)
-            {
-                //in programtheblockchain they refund something not really sure why
-
-                //update second bid
-                Storage.Put(Storage.CurrentContext, "secondBid", value);
-            }
+            Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
 
             return true;
         }
@@ -326,26 +266,6 @@ namespace NEO
 
         private static BigInteger BytesToBigInteger(byte[] data) => data.AsBigInteger();
 
-        // private static byte[] GenerateHash(byte[] amount, byte[] nonce)
-        // {
-        //     HashAlgorithm algorithm = new SHA256Managed();
-
-        //     byte[] plainTextWithSaltBytes =
-        //         new byte[amount.Length + nonce.Length];
-
-        //     for (int i = 0; i < amount.Length; i++)
-        //     {
-        //         plainTextWithSaltBytes[i] = amount[i];
-        //     }
-        //     for (int i = 0; i < nonce.Length; i++)
-        //     {
-        //         plainTextWithSaltBytes[amount.Length + i] = nonce[i];
-        //     }
-
-        //     return algorithm.ComputeHash(plainTextWithSaltBytes);
-        // }
-
-        
         private static string GenerateSHA256String(byte[] input)
         {
             SHA256 sha256 = SHA256Managed.Create();
@@ -356,7 +276,7 @@ namespace NEO
         private static string GetStringFromHash(byte[] hash)
         {
             StringBuilder str = new StringBuilder();
-            foreach(byte b in hash)
+            foreach (byte b in hash)
             {
                 str.Append(b.ToString("X2"));
             }
@@ -367,13 +287,13 @@ namespace NEO
             byte[] array3 = new byte[array1.Length + array2.Length];
 
             //append first array
-            for(int i = 0; i<array1.Length; i++)
+            for (int i = 0; i < array1.Length; i++)
             {
                 array3[i] = array1[i];
             }
 
             //append 2nd array
-            for(int i = array1.Length; i<array3.Length; i++)
+            for (int i = array1.Length; i < array3.Length; i++)
             {
                 array3[i] = array2[i - array1.Length];
             }

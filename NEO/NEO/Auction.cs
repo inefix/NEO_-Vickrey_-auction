@@ -12,7 +12,7 @@ using System.Collections;
 [Serializable()]
 public class Auction
 {
-    public int amount { get; set; }
+    public string secret{ get; set; }
     public uint startTime { get; set; }
     public uint endOfBidding { get; set; }
     public uint endOfRevealing { get; set; }
@@ -24,9 +24,9 @@ public class Auction
 
     public List<Bidder> bidders;
 
-    public Auction(int amount, uint startTime, int durationBidding, int durationRevealing, BigInteger reservePrice, byte[] higherBidder)
+    public Auction(string secret, uint startTime, int durationBidding, int durationRevealing, BigInteger reservePrice, byte[] higherBidder)
     {
-        this.amount = amount;
+        this.secret = secret;
         this.startTime = startTime;
         this.endOfBidding = startTime + (uint)durationBidding;
         this.endOfRevealing = startTime + (uint)durationBidding + (uint)durationRevealing;
@@ -46,6 +46,10 @@ public class Auction
         bidders = new List<Bidder>();
     }
 
+    public void ConfirmReveal(byte[] address)
+    {
+        bidders[GetBidderIndex(address)].hasRevealed = true;
+    }
     public void AddBidder(Bidder bidder)
     {
         int index = GetBidderIndex(bidder.address);
