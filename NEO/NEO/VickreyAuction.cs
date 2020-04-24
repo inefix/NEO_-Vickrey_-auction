@@ -6,6 +6,8 @@ using System.ComponentModel;
 using System.Numerics;
 using System.Text;
 using System.Security.Cryptography;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.IO;
 
 namespace NEO
 {
@@ -58,7 +60,7 @@ namespace NEO
 
                 if (method == "Init") return Init((int)args[0], (int)args[1], (int)args[2], (int)args[3]);
 
-                if (method == "Bid") return Bid((string)args[0]);
+                //if (method == "Bid") return Bid((string)args[0]);
 
                 if (method == "Claim") return Claim();
 
@@ -66,9 +68,11 @@ namespace NEO
 
                 if (method == "Withdraw") return Withdraw();
 
-                if (method =="GetReceiver") return GetReceiver();
+                if (method == "GetReceiver") return GetReceiver();
 
-                if (method =="GetSender") return GetSender();
+                if (method == "GetSender") return GetSender();
+
+                if (method == "GetTime") return GetCurrentTime();
             }
             return false;
         }
@@ -101,30 +105,26 @@ namespace NEO
             return true;
         }
 
-        private static bool Init(int amount, int reservePrice, int biddingPeriod, int revealingPeriod)
+        [DisplayName("getTime")]
+        public static BigInteger GetCurrentTime()
+        {
+            return (BigInteger)Runtime.Time;
+        }
+
+        //IS THE AMOUNT STILL USEFUL ?
+        private static bool Init(int amount, BigInteger reservePrice, int durationBidding, int durationReveal)
         {
             if (!Runtime.CheckWitness(Owner)) return false;
 
-            Transferred(Owner, null, amount);
+            //Transferred(Owner, null, amount);
+            Transferred(Owner, null, reservePrice);
 
-            Storage.Put(Storage.CurrentContext, "amount", amount);
-            Storage.Put(Storage.CurrentContext, "reservePrice", reservePrice);
-            uint now = Runtime.Time;
-            int endOfBidding = (int)now + biddingPeriod;
-            int endOfRevealing = (int)endOfBidding + revealingPeriod;
-            Storage.Put(Storage.CurrentContext, "biddingPeriod", biddingPeriod);
-            Storage.Put(Storage.CurrentContext, "revealingPeriod", revealingPeriod);
-            Storage.Put(Storage.CurrentContext, "now", now);
-            Storage.Put(Storage.CurrentContext, "endOfBidding", endOfBidding);
-            Storage.Put(Storage.CurrentContext, "endOfRevealing", endOfRevealing);
-            byte[] highBidder = Owner;
-            int highBid = reservePrice;
-            int secondBid = reservePrice;
-            Storage.Put(Storage.CurrentContext, "highBidder", highBidder);
-            Storage.Put(Storage.CurrentContext, "highBid", highBid);
-            Storage.Put(Storage.CurrentContext, "secondBid", secondBid);
-            StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
-            revealed.Put(Owner, BoolToBytes(true));     //bool boolValueBack = BitConverter.ToBoolean(bytes, 0);
+            //Auction
+            Auction auction = new Auction(Runtime.Time, durationBidding, durationReveal, reservePrice, Owner);
+
+            Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
+            //StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
+            //revealed.Put(Owner, BoolToBytes(true));
             return true;
 
         }
@@ -148,43 +148,40 @@ namespace NEO
             return true;
         }
 
-        private static ulong Bid(string hash)
+        private static bool Bid(byte[] bidderAddress, string hash)
         {
-            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));     //bider can bid multiple times
-            StorageMap hashedBidOf = Storage.CurrentContext.CreateMap(nameof(hashedBidOf));
+            //a quoi sert cette ligne = le owner va toute facon passer le test ????
+            if (Runtime.CheckWitness(Owner)) return false;
 
-            if (Runtime.CheckWitness(Owner)) return 0;
+            //Deserialize auction
+            Auction auction = (Auction) Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
+            if (Runtime.Time >= auction.endOfBidding) return false;
 
-            byte[] endOfBidding = Storage.Get(Storage.CurrentContext, "endOfBidding");
+            //Store bidder's info
+            Bidder bidder = new Bidder(bidderAddress, hash);
+            auction.AddBidder(bidder);
 
-            ulong value = 0;
+            //Store bidder's info
+            //ulong value = 0;
+            //Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
+            //TransactionOutput reference = tx.GetReferences()[0];
 
-            if (Runtime.Time < (uint)BytesToBigInteger(endOfBidding))
-            {
-                //store the amount of neo sent
-                Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
-                TransactionOutput reference = tx.GetReferences()[0];
-                if (reference.AssetId != neo_asset_id) return 0;          //accept NEO
-                //if (reference.AssetId != gas_asset_id) return 0;        //accept GAS
-                byte[] sender = reference.ScriptHash;
-                byte[] receiver = ExecutionEngine.ExecutingScriptHash;
-                
-                TransactionOutput[] outputs = tx.GetOutputs();
-                // get the total amount of Neo
-                foreach (TransactionOutput output in outputs)
-                {
-                    if (output.ScriptHash == receiver)
-                    {
-                        value += (ulong)output.Value;
-                    }
-                }
-                balanceOf.Put(sender, value);
+            ////if (reference.AssetId != neo_asset_id) return 0;          //accept NEO
+            ////if (reference.AssetId != gas_asset_id) return 0;        //accept GAS
+            //byte[] sender = reference.ScriptHash;
+            //byte[] receiver = ExecutionEngine.ExecutingScriptHash;
 
-                //store the hash
-                hashedBidOf.Put(sender, hash);
-            }
+            //TransactionOutput[] outputs = tx.GetOutputs();
+            //// get the total amount of Neo
+            //foreach (TransactionOutput output in outputs)
+            //{
+            //    if (output.ScriptHash == receiver)
+            //    {
+            //        value += (ulong)output.Value;
+            //    }
+            //}
 
-            return value;
+            return true;
         }
 
         private static bool Claim()
@@ -232,11 +229,11 @@ namespace NEO
             //Check time period
             byte[] endOfBidding = Storage.Get(Storage.CurrentContext, "endOfBidding");
             byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
-            if(Runtime.Time < (uint)BytesToBigInteger(endOfBidding) || Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing)) return false;
-            
+            if (Runtime.Time < (uint)BytesToBigInteger(endOfBidding) || Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing)) return false;
+
 
             //TODO : ??? BALANCE OF SENDER > AMOUNT (NOT SURE IF NEEDED) ???
-            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));    
+            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
             StorageMap hashedBidOf = Storage.CurrentContext.CreateMap(nameof(hashedBidOf));
 
             //store the amount of neo sent
@@ -247,7 +244,7 @@ namespace NEO
             //if (reference.AssetId != gas_asset_id) return 0;        //accept GAS
             byte[] sender = reference.ScriptHash;
             byte[] receiver = ExecutionEngine.ExecutingScriptHash;
-            
+
             TransactionOutput[] outputs = tx.GetOutputs();
             // get the total amount of Neo
             foreach (TransactionOutput output in outputs)
@@ -267,7 +264,8 @@ namespace NEO
             BigInteger highBid = Storage.Get(Storage.CurrentContext, "highBid").AsBigInteger();
             BigInteger secondBid = Storage.Get(Storage.CurrentContext, "secondBid").AsBigInteger();
             //check if highest bid
-            if(value > (ulong) highBid){
+            if (value > (ulong)highBid)
+            {
                 //refund previous higher
 
                 //update highest and second highest
@@ -276,7 +274,9 @@ namespace NEO
                 Storage.Put(Storage.CurrentContext, "highBidder", sender);
 
                 //transfer the money
-            } else if (value > (ulong) secondBid){
+            }
+            else if (value > (ulong)secondBid)
+            {
                 //in programtheblockchain they refund something not really sure why
 
                 //update second bid
@@ -290,7 +290,7 @@ namespace NEO
         {
             //check timing period
             byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
-            if(Runtime.Time < (uint)BytesToBigInteger(endOfRevealing)) return false;
+            if (Runtime.Time < (uint)BytesToBigInteger(endOfRevealing)) return false;
 
             //check caller has revealed his bid
             byte[] caller = GetCaller();
@@ -300,7 +300,7 @@ namespace NEO
             // if (!BitConverter.ToBoolean((byte[]) revealed.Get(caller), 0)) return false;
 
             //transfer money from owner to caller
-            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));    
+            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
             Transfer(Owner, caller, balanceOf.Get(caller).AsBigInteger());
             return true;
         }
@@ -348,19 +348,21 @@ namespace NEO
             return true;
         }
 
-        [DisplayName("getReceiver")]  
+        [DisplayName("getReceiver")]
         public static byte[] GetReceiver()
         {
             return ExecutionEngine.ExecutingScriptHash;
         }
 
-        [DisplayName("getCaller")]  
-        public static byte[] GetCaller(){
+        [DisplayName("getCaller")]
+        public static byte[] GetCaller()
+        {
             return ExecutionEngine.CallingScriptHash;
         }
 
         [DisplayName("getSender")]
-        public static byte[] GetSender(){
+        public static byte[] GetSender()
+        {
             Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
             TransactionOutput[] reference = tx.GetReferences();
             // you can choice refund or not refund
@@ -368,7 +370,30 @@ namespace NEO
             {
                 if (output.AssetId == neo_asset_id) return output.ScriptHash;
             }
-            return new byte[1]{0x20};
+            return new byte[1] { 0x20 };
+        }
+
+        private static byte[] Serialize(object obj)
+        {
+            if (obj == null) return null;
+
+            BinaryFormatter bf = new BinaryFormatter();
+            using (MemoryStream ms = new MemoryStream())
+            {
+                bf.Serialize(ms, obj);
+                return ms.ToArray();
+            }
+        }
+
+        private static Object Deserialize(byte[] bytes)
+        {
+            using (MemoryStream ms = new MemoryStream())
+            {
+                BinaryFormatter bf = new BinaryFormatter();
+                ms.Write(bytes, 0, bytes.Length);
+                ms.Seek(0, SeekOrigin.Begin);
+                return bf.Deserialize(ms);
+            }
         }
     }
 }
