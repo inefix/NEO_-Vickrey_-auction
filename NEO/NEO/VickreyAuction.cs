@@ -58,7 +58,7 @@ namespace NEO
 
                 //if (method == "Transfer") return Transfer((byte[])args[0], (byte[])args[1], (BigInteger)args[2], ExecutionEngine.CallingScriptHash);
 
-                if (method == "Init") return Init((string)args[0], (int)args[1], (int)args[2], (int)args[3]);
+                if (method == "Init") return Init((string)args[0], (int)args[1], (int)args[2], (int)args[3], (int)args[4]);
 
                 if (method == "Announce") return Announce((byte[])args[0]);
 
@@ -66,7 +66,9 @@ namespace NEO
 
                 if (method == "Claim") return Claim();
 
-                if (method == "Result") return Result();
+                if (method == "Result") return Result((byte[])args[0]);
+
+                if (method == "End") return End();
 
                 if (method == "Reveal") return Reveal((byte[])args[0], (int)args[1], (int)args[2]);
 
@@ -117,12 +119,12 @@ namespace NEO
             return (BigInteger)Runtime.Time;
         }
 
-        private static bool Init(string secret, BigInteger reservePrice, int durationBidding, int durationReveal)
+        private static bool Init(string secret, BigInteger reservePrice, int durationBidding, int durationReveal, int durationResluting)
         {
             if (!Runtime.CheckWitness(Owner)) return false;
 
             //Auction
-            Auction auction = new Auction(secret, Runtime.Time, durationBidding, durationReveal, reservePrice, Owner);
+            Auction auction = new Auction(secret, Runtime.Time, durationBidding, durationReveal, durationResluting, reservePrice, Owner);
 
             Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
             //StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
@@ -174,6 +176,8 @@ namespace NEO
             string generatedHash = GenerateSHA256(stake, nonce);
             if (hash != generatedHash) return false;
 
+            auction.SetBiderStake(senderAddress, stake);
+
             //Confirm reveal of bidder
             auction.ConfirmReveal(senderAddress);
             Transferred(senderAddress, null, stake);
@@ -203,11 +207,13 @@ namespace NEO
             if (Runtime.CheckWitness(auction.higherBidder))
             {
                 //create variable to know if highBidder has called result
+                auction.hasResulted = true;
+                Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
                 Transferred(auction.higherBidder, Owner, auction.secondBid);
                 return auction.secret;
             } else
             {
-                //Transferred(null, senderAddress, stake)
+                Transferred(null, senderAddress, auction.GetBiderStake(senderAddress));
             }
             return "true";
         }
@@ -215,7 +221,12 @@ namespace NEO
         private static bool End()
         {
             if (!Runtime.CheckWitness(Owner)) return false;
-
+            Auction auction = (Auction)Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
+            if (Runtime.Time < auction.endOfResulting) return false; 
+            if (auction.hasResulted == false)
+            {
+                Transferred(auction.higherBidder, Owner, auction.secondBid);
+            }
             return true;
         }
 
@@ -251,7 +262,7 @@ namespace NEO
 
             //transfer money from owner to caller
             StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
-            Transfer(Owner, caller, balanceOf.Get(caller).AsBigInteger());
+            Transferred(Owner, caller, balanceOf.Get(caller).AsBigInteger());
             return true;
         }
 

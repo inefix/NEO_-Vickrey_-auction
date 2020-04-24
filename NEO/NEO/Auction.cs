@@ -16,20 +16,23 @@ public class Auction
     public uint startTime { get; set; }
     public uint endOfBidding { get; set; }
     public uint endOfRevealing { get; set; }
+    public uint endOfResulting { get; set; }
 
     public BigInteger reservePrice { get; set; }
     public BigInteger highestBid { get; set; }
     public BigInteger secondBid { get; set; }
     public byte[] higherBidder { get; set; }
+    public bool hasResulted { get; set; }
 
     public List<Bidder> bidders;
 
-    public Auction(string secret, uint startTime, int durationBidding, int durationRevealing, BigInteger reservePrice, byte[] higherBidder)
+    public Auction(string secret, uint startTime, int durationBidding, int durationRevealing, int durationResulting, BigInteger reservePrice, byte[] higherBidder)
     {
         this.secret = secret;
         this.startTime = startTime;
         this.endOfBidding = startTime + (uint)durationBidding;
         this.endOfRevealing = startTime + (uint)durationBidding + (uint)durationRevealing;
+        this.endOfResulting = startTime + (uint)durationBidding + (uint)durationRevealing + (uint)durationResulting;
 
         this.reservePrice = reservePrice;
         this.highestBid = reservePrice;
@@ -37,12 +40,7 @@ public class Auction
 
         this.higherBidder = higherBidder;
         bidders = new List<Bidder>();
-    }
-
-    public Auction()
-    {
-        reservePrice = 100;
-        bidders = new List<Bidder>();
+        hasResulted = false;
     }
 
     public void ConfirmReveal(byte[] address)
@@ -58,6 +56,11 @@ public class Auction
     public void SetBiderStake(byte[] address, int stake)
     {
         bidders[GetBidderIndex(address)].stake = stake;
+    }
+
+    public int GetBiderStake(byte[] address)
+    {
+        return bidders[GetBidderIndex(address)].stake;
     }
 
     public bool AnnounceBidder(byte[] address)
