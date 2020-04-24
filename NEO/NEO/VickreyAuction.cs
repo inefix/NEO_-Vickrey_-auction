@@ -60,7 +60,7 @@ namespace NEO
 
                 if (method == "Init") return Init((string)args[0], (int)args[1], (int)args[2], (int)args[3]);
 
-                //if (method == "Bid") return Bid((string)args[0]);
+                if (method == "Bid") return Bid((byte[])args[0], (string)args[1]);
 
                 if (method == "Claim") return Claim();
 
@@ -124,25 +124,6 @@ namespace NEO
             //revealed.Put(Owner, BoolToBytes(true));
             return true;
 
-        }
-
-        private static bool BidNonce(byte[] account, string hash, int nonce)
-        {
-            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
-            StorageMap hashedBidOf = Storage.CurrentContext.CreateMap(nameof(hashedBidOf));
-            StorageMap nonceOf = Storage.CurrentContext.CreateMap(nameof(nonceOf));
-            nonceOf.Put(account, nonce);
-
-            if (Runtime.CheckWitness(Owner)) return false;
-
-            byte[] endOfBidding = Storage.Get(Storage.CurrentContext, "endOfBidding");
-
-            if (Runtime.Time < (uint)BytesToBigInteger(endOfBidding))
-            {
-                hashedBidOf.Put(account, hash);
-            }
-
-            return true;
         }
 
         private static bool Bid(byte[] bidderAddress, string hash)
@@ -244,9 +225,6 @@ namespace NEO
             //check caller has revealed his bid
             byte[] caller = GetCaller();
             StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
-
-            //TODO ERROR HERE WITH BITCONVERTER --> NEED TO GET REVEALED VALUE TRUE OR FALSE
-            // if (!BitConverter.ToBoolean((byte[]) revealed.Get(caller), 0)) return false;
 
             //transfer money from owner to caller
             StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
