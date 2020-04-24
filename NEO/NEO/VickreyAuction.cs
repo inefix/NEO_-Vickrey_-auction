@@ -140,6 +140,7 @@ namespace NEO
 
             if (!auction.AnnounceBidder(address)) return false;
             Transferred(null, address, 1000);
+            Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
             return true;
         }
 
@@ -155,43 +156,6 @@ namespace NEO
             auction.SetBiderHash(bidderAddress, hash);
             Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
 
-            return true;
-        }
-
-        private static bool Claim()
-        {
-            //TODO
-            byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
-            byte[] highBidder = Storage.Get(Storage.CurrentContext, "highBidder");
-            byte[] amount = Storage.Get(Storage.CurrentContext, "amount");
-
-            if (!Runtime.CheckWitness(highBidder)) return false;
-
-            if (Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing))
-            {
-                Transferred(null, highBidder, (int)BytesToBigInteger(amount));
-                return true;
-            }
-            return false;
-        }
-
-        //not necessary in my opinion
-        public static bool Transfer(byte[] from, byte[] to, BigInteger value)
-        {
-            if (value <= 0) return false;
-            if (!Runtime.CheckWitness(from)) return false;
-            if (to.Length != 20) return false;
-
-            BigInteger from_value = Storage.Get(Storage.CurrentContext, from).AsBigInteger();
-            if (from_value < value) return false;
-            if (from == to) return true;
-            if (from_value == value)
-                Storage.Delete(Storage.CurrentContext, from);
-            else
-                Storage.Put(Storage.CurrentContext, from, from_value - value);
-            BigInteger to_value = Storage.Get(Storage.CurrentContext, to).AsBigInteger();
-            Storage.Put(Storage.CurrentContext, to, to_value + value);
-            Transferred(from, to, value);
             return true;
         }
 
