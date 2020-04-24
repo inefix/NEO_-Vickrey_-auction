@@ -14,20 +14,20 @@ using System.Collections;
 public class Bidder
 {
     public byte[] address { get; set; }
-    public ulong value { get; set; }
+    public int stake { get; set; }
     public string hash { get; set; }
     public bool hasRevealed { get; set; }
+    public bool hasAnnounced { get; set; }
 
-    public Bidder(byte[] address, ulong value, string hash)
-    {
-        this.address = address;
-        this.value = value;
-        this.hash = hash;
-        this.hasRevealed = false;
-    }
     public Bidder(byte[] address, string hash)
     {
         this.address = address;
         this.hash = hash;
+    }
+
+    public Bidder(byte[] address)
+    {
+        this.address = address;
+        this.hasAnnounced = true;
     }
 }

@@ -60,6 +60,8 @@ namespace NEO
 
                 if (method == "Init") return Init((string)args[0], (int)args[1], (int)args[2], (int)args[3]);
 
+                if (method == "Announce") return Announce((byte[])args[0]);
+
                 if (method == "Bid") return Bid((byte[])args[0], (string)args[1]);
 
                 if (method == "Claim") return Claim();
@@ -73,6 +75,8 @@ namespace NEO
                 if (method == "GetSender") return GetSender();
 
                 if (method == "GetTime") return GetCurrentTime();
+
+                if (method == "GenerateHash") return GenerateSHA256((int)args[0], (int)args[1]);
             }
             return false;
         }
@@ -111,7 +115,6 @@ namespace NEO
             return (BigInteger)Runtime.Time;
         }
 
-        //IS THE AMOUNT STILL USEFUL ?
         private static bool Init(string secret, BigInteger reservePrice, int durationBidding, int durationReveal)
         {
             if (!Runtime.CheckWitness(Owner)) return false;
@@ -126,6 +129,18 @@ namespace NEO
 
         }
 
+        private static bool Announce(byte[] address)
+        {
+            if (Runtime.CheckWitness(Owner)) return false;
+
+            Auction auction = (Auction)Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
+            if (Runtime.Time >= auction.endOfBidding) return false;
+
+            if (!auction.AnnounceBidder(address)) return false;
+            Transferred(null, address, 1000);
+            return true;
+        }
+
         private static bool Bid(byte[] bidderAddress, string hash)
         {
             if (Runtime.CheckWitness(Owner)) return false;
@@ -135,8 +150,7 @@ namespace NEO
             if (Runtime.Time >= auction.endOfBidding) return false;
 
             //Store bidder's info
-            Bidder bidder = new Bidder(bidderAddress, hash);
-            auction.AddBidder(bidder);
+            auction.SetBiderHash(bidderAddress, hash);
             Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
 
             return true;
@@ -155,11 +169,8 @@ namespace NEO
             {
                 Transferred(null, highBidder, (int)BytesToBigInteger(amount));
                 return true;
-
             }
-
             return false;
-
         }
 
         //not necessary in my opinion
@@ -194,12 +205,12 @@ namespace NEO
             if (hash == null) return false;
 
             //Compute hash and compare
-            byte[] byteHash = AppendByteArrays(BitConverter.GetBytes(stake), BitConverter.GetBytes(nonce));
-            string generatedHash = GenerateSHA256String(byteHash);
+            string generatedHash = GenerateSHA256(stake, nonce);
             if (hash != generatedHash) return false;
 
             //Confirm reveal of bidder
             auction.ConfirmReveal(senderAddress);
+            Transferred(senderAddress, null, stake);
 
             if (stake > auction.highestBid)
             {
@@ -244,9 +255,11 @@ namespace NEO
 
         private static BigInteger BytesToBigInteger(byte[] data) => data.AsBigInteger();
 
-        private static string GenerateSHA256String(byte[] input)
+        [DisplayName("GenerateHash")]
+        private static string GenerateSHA256(int stake, int nonce)
         {
             SHA256 sha256 = SHA256Managed.Create();
+            byte[] input = AppendByteArrays(BitConverter.GetBytes(stake), BitConverter.GetBytes(nonce));
             byte[] hash = sha256.ComputeHash(input);
             return GetStringFromHash(hash);
         }
