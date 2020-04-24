@@ -117,7 +117,7 @@ namespace NEO
             if (!Runtime.CheckWitness(Owner)) return false;
 
             //Transferred(Owner, null, amount);
-            Transferred(Owner, null, reservePrice);
+            Transferred(Owner, null, amount);
 
             //Auction
             Auction auction = new Auction(Runtime.Time, durationBidding, durationReveal, reservePrice, Owner);
@@ -150,11 +150,10 @@ namespace NEO
 
         private static bool Bid(byte[] bidderAddress, string hash)
         {
-            //a quoi sert cette ligne = le owner va toute facon passer le test ????
             if (Runtime.CheckWitness(Owner)) return false;
 
             //Deserialize auction
-            Auction auction = (Auction) Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
+            Auction auction = (Auction)Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
             if (Runtime.Time >= auction.endOfBidding) return false;
 
             //Store bidder's info
@@ -224,13 +223,23 @@ namespace NEO
             return true;
         }
 
-        private static bool Reveal(int nonce)
+        private static bool Reveal(byte[] senderAddress, int stake, int nonce)
         {
-            //Check time period
-            byte[] endOfBidding = Storage.Get(Storage.CurrentContext, "endOfBidding");
-            byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
-            if (Runtime.Time < (uint)BytesToBigInteger(endOfBidding) || Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing)) return false;
+            //Get auction
+            Auction auction = (Auction)Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
+            uint now = Runtime.Time;
+            if (now < auction.endOfBidding || now >= auction.endOfRevealing) return false;
 
+            //Get bidder's hash
+            string hash = auction.GetBidderHash(senderAddress);
+            if (hash == null) return false;
+
+            //Compute hash and compare
+            byte[] byteHash = AppendByteArrays(BitConverter.GetBytes(stake), BitConverter.GetBytes(nonce));
+            string generatedHash = GenerateSHA256String(byteHash);
+            if (hash != generatedHash) return false;
+
+           
 
             //TODO : ??? BALANCE OF SENDER > AMOUNT (NOT SURE IF NEEDED) ???
             StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
@@ -336,6 +345,41 @@ namespace NEO
         //     return algorithm.ComputeHash(plainTextWithSaltBytes);
         // }
 
+        
+        private static string GenerateSHA256String(byte[] input)
+        {
+            SHA256 sha256 = SHA256Managed.Create();
+            byte[] hash = sha256.ComputeHash(input);
+            return GetStringFromHash(hash);
+        }
+
+        private static string GetStringFromHash(byte[] hash)
+        {
+            StringBuilder str = new StringBuilder();
+            foreach(byte b in hash)
+            {
+                str.Append(b.ToString("X2"));
+            }
+            return str.ToString();
+        }
+        private static byte[] AppendByteArrays(byte[] array1, byte[] array2)
+        {
+            byte[] array3 = new byte[array1.Length + array2.Length];
+
+            //append first array
+            for(int i = 0; i<array1.Length; i++)
+            {
+                array3[i] = array1[i];
+            }
+
+            //append 2nd array
+            for(int i = array1.Length; i<array3.Length; i++)
+            {
+                array3[i] = array2[i - array1.Length];
+            }
+
+            return array3;
+        }
         private static bool CompareByteArrays(byte[] array1, byte[] array2)
         {
             if (array1.Length != array2.Length) return false;

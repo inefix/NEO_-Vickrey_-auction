@@ -12,6 +12,7 @@ using System.Collections;
 [Serializable()]
 public class Auction
 {
+    public int amount { get; set; }
     public uint startTime { get; set; }
     public uint endOfBidding { get; set; }
     public uint endOfRevealing { get; set; }
@@ -23,8 +24,9 @@ public class Auction
 
     public List<Bidder> bidders;
 
-    public Auction(uint startTime, int durationBidding, int durationRevealing, BigInteger reservePrice, byte[] higherBidder)
+    public Auction(int amount, uint startTime, int durationBidding, int durationRevealing, BigInteger reservePrice, byte[] higherBidder)
     {
+        this.amount = amount;
         this.startTime = startTime;
         this.endOfBidding = startTime + (uint)durationBidding;
         this.endOfRevealing = startTime + (uint)durationBidding + (uint)durationRevealing;
@@ -35,7 +37,7 @@ public class Auction
 
         this.higherBidder = higherBidder;
         bidders = new List<Bidder>();
-
+        AddBidder(new Bidder(higherBidder, "HASH")); //SEE IF NEED TO ADD OWNER AS BIDDER
     }
 
     public Auction()
@@ -70,6 +72,16 @@ public class Auction
         }
 
         return -1;
+    }
+
+    public string GetBidderHash(byte[] address)
+    {
+        for (int i = 0; i < bidders.Count; i++)
+        {
+            if (CompareByteArrays(bidders[i].address, address)) return bidders[i].hash;
+        }
+
+        return null;
     }
 
     private bool CompareByteArrays(byte[] array1, byte[] array2)
