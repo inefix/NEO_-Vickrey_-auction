@@ -158,8 +158,6 @@ namespace NEO
             return true;
         }
 
-<<<<<<< HEAD
-=======
         private static bool Claim()
         {
             //TODO
@@ -197,7 +195,6 @@ namespace NEO
             return true;
         }
 
->>>>>>> 69d81c126a7013868e571275adcda6bd5ca8efce
         private static bool Reveal(byte[] senderAddress, int stake, int nonce)
         {
             //Get auction
