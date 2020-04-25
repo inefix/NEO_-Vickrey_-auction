@@ -1,0 +1,37 @@
+---CREATE SMART CONTRACT---
+dotnet new neo-contract
+see --help for info
+
+---BUILD SMART CONTRACT---
+cd folder
+dotnet build
+
+---CREATE A NEO EXPRESS BLOCKCHAIN SMART CONTRACT---
+neo-express create
+
+---RUN THE BLOCKCHAIN---
+neo-express run -s 1
+
+---CREATE WALLET---
+neo-express wallet create VickreyAuctionWallet
+
+---NEO TRANSFER ASSET---
+neo-express transfer NEO 100000000 genesis VickreyAuctionWallet
+neo-express transfer NEO 100000000 VickreyAuctionWallet VickreyAuctionWallet
+neo-express transfer GAS 232 genesis VickreyAuctionWallet
+neo-express transfer GAS 336 VickreyAuctionWallet VickreyAuctionWallet
+
+---SHOW UNCLAIMED GAS WALLET---
+neo-express show gas VickreyAuctionWallet
+
+---CLAIM GAS---
+neo-express claim gas genesis
+neo-express claim gas VickreyAuctionWallet
+
+---DEPLOY CONTRACT---
+neo-express contract deploy .\bin\Debug\netstandard2.0\VickreyAuction.avm VickreyAuctionWallet
+
+---INVOKE METHOD---
+neo-express contract invoke .\bin\Debug\netstandard2.0\VickreyAuction.avm -f Main Deploy [] 
+neo-express contract invoke .\VickreyAuction\bin\Debug\netstandard2.0\VickreyAuction.avm -f name 
+neo-express contract invoke -i -f decimals .\privnet.neo-express.json .\VickreyAuction\bin\Debug\netstandard2.0\VickreyAuction.avm
