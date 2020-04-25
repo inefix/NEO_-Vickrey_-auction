@@ -8,6 +8,7 @@ using System.Text;
 using System.Security.Cryptography;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.IO;
+using System.Collections.Generic;
 
 namespace NEO
 {
@@ -115,8 +116,7 @@ namespace NEO
 
             //Auction
             Auction auction = new Auction(secret, Runtime.Time, durationBidding, durationReveal, durationResulting, reservePrice, Owner);
-
-            Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
+            Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
             return true;
         }
 
@@ -124,13 +124,13 @@ namespace NEO
         {
             if (Runtime.CheckWitness(Owner)) return false;
 
-            Auction auction = (Auction)Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
+            Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
             if (Runtime.Time >= auction.endOfBidding) return false;
 
             if (!auction.AnnounceBidder(address)) return false;
             Transferred(null, address, 1000);
-            Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
-            Storage.Put("totalSupply", BytesToBigInteger(Storage.Get("totalSupply"))+1000);
+            Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
+            Storage.Put("totalSupply", BytesToBigInteger(Storage.Get("totalSupply")) + 1000);
             return true;
         }
 
@@ -139,12 +139,12 @@ namespace NEO
             if (Runtime.CheckWitness(Owner)) return false;
 
             //Deserialize auction
-            Auction auction = (Auction)Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
+            Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
             if (Runtime.Time >= auction.endOfBidding) return false;
 
             //Store bidder's info
             auction.SetBiderHash(bidderAddress, hash);
-            Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
+            Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
 
             return true;
         }
@@ -152,7 +152,7 @@ namespace NEO
         private static bool Reveal(byte[] senderAddress, int stake, int nonce)
         {
             //Get auction
-            Auction auction = (Auction)Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
+            Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
             uint now = Runtime.Time;
             if (now < auction.endOfBidding || now >= auction.endOfRevealing) return false;
 
@@ -180,24 +180,25 @@ namespace NEO
             {
                 auction.secondBid = stake;
             }
-            Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
+            Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
 
             return true;
         }
 
         private static string Result(byte[] senderAddress)
         {
-            Auction auction = (Auction)Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
+            Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
             uint now = Runtime.Time;
             if (now < auction.endOfRevealing || now >= auction.endOfResulting) return "wait";
             if (Runtime.CheckWitness(auction.higherBidder))
             {
                 //create variable to know if highBidder has called result
                 auction.hasResulted = true;
-                Storage.Put(Storage.CurrentContext, "auction", Serialize(auction));
+                Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
                 Transferred(auction.higherBidder, Owner, auction.secondBid);
                 return auction.secret;
-            } else
+            }
+            else
             {
                 Transferred(null, senderAddress, auction.GetBiderStake(senderAddress));
             }
@@ -207,87 +208,13 @@ namespace NEO
         private static bool End()
         {
             if (!Runtime.CheckWitness(Owner)) return false;
-            Auction auction = (Auction)Deserialize(Storage.Get(Storage.CurrentContext, "auction"));
-            if (Runtime.Time < auction.endOfResulting) return false; 
+            Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
+            if (Runtime.Time < auction.endOfResulting) return false;
             if (auction.hasResulted == false)
             {
                 Transferred(auction.higherBidder, Owner, auction.secondBid);
             }
             return true;
-        }
-
-        private static bool Claim()
-        {
-            //TODO
-            byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
-            byte[] highBidder = Storage.Get(Storage.CurrentContext, "highBidder");
-            byte[] amount = Storage.Get(Storage.CurrentContext, "amount");
-
-            if (!Runtime.CheckWitness(highBidder)) return false;
-
-            if (Runtime.Time >= (uint)BytesToBigInteger(endOfRevealing))
-            {
-                Transferred(null, highBidder, (int)BytesToBigInteger(amount));
-                return true;
-
-            }
-
-            return false;
-
-        }
-
-        private static bool Withdraw()
-        {
-            //check timing period
-            byte[] endOfRevealing = Storage.Get(Storage.CurrentContext, "endOfRevealing");
-            if (Runtime.Time < (uint)BytesToBigInteger(endOfRevealing)) return false;
-
-            //check caller has revealed his bid
-            //byte[] caller = GetCaller();
-            StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
-
-            //transfer money from owner to caller
-            StorageMap balanceOf = Storage.CurrentContext.CreateMap(nameof(balanceOf));
-            //Transferred(Owner, caller, balanceOf.Get(caller).AsBigInteger());
-            return true;
-        }
-
-        private static bool Transfer(byte[] from, byte[] to, BigInteger amount, byte[] callscript)
-        {
-            //Check parameters
-            if (from.Length != 20 || to.Length != 20)
-                throw new InvalidOperationException("The parameters from and to SHOULD be 20-byte addresses.");
-            if (amount <= 0)
-                throw new InvalidOperationException("The parameter amount MUST be greater than 0.");
-            if (!IsPayable(to))
-                return false;
-            if (!Runtime.CheckWitness(from) && from.AsBigInteger() != callscript.AsBigInteger())
-                return false;
-            StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
-            var fromAmount = asset.Get(from).AsBigInteger();
-            if (fromAmount < amount)
-                return false;
-            if (from == to)
-                return true;
-
-            //Reduce payer balances
-            if (fromAmount == amount)
-                asset.Delete(from);
-            else
-                asset.Put(from, fromAmount - amount);
-
-            //Increase the payee balance
-            var toAmount = asset.Get(to).AsBigInteger();
-            asset.Put(to, toAmount + amount);
-
-            Transferred(from, to, amount);
-            return true;
-        }
-
-        private static bool IsPayable(byte[] to)
-        {
-            var c = Blockchain.GetContract(to);
-            return c == null || c.IsPayable;
         }
 
         private static string BytesToString(byte[] data) => data.AsString();
@@ -299,62 +226,181 @@ namespace NEO
         [DisplayName("GenerateHash")]
         private static string GenerateSHA256(int stake, int nonce)
         {
-            SHA256 sha256 = SHA256Managed.Create();
-            byte[] input = AppendByteArrays(BitConverter.GetBytes(stake), BitConverter.GetBytes(nonce));
-            byte[] hash = sha256.ComputeHash(input);
-            return GetStringFromHash(hash);
+            //Store int values to retrieve it in bytes
+            //NEOCompiler doesn't recognize System.BitConverter.GetBytes
+            Storage.Put(Storage.CurrentContext, "bytes-stake", stake);
+            Storage.Put(Storage.CurrentContext, "bytes-nonce", nonce);
+            //byte[] input = AppendByteArrays(Storage.Get(Storage.CurrentContext, "bytes-stake"), Storage.Get(Storage.CurrentContext, "bytes-nonce"));
+            byte[] input = Neo.SmartContract.Framework.Helper.Concat(Storage.Get(Storage.CurrentContext, "bytes-stake"), Storage.Get(Storage.CurrentContext, "bytes-nonce"));
+            //Remove from storage
+            Storage.Delete(Storage.CurrentContext, "bytes-stake");
+            Storage.Delete(Storage.CurrentContext, "bytes-nonce");
+            byte[] hash = Sha256(input);
+            //return GetStringFromHash(hash);
+            return hash.AsString();
         }
 
-        private static string GetStringFromHash(byte[] hash)
+        //private static string GetStringFromHash(byte[] hash)
+        //{
+        //    StringBuilder str = new StringBuilder();
+        //    foreach (byte b in hash)
+        //    {
+        //        str.Append(b.ToString("X2"));
+        //    }
+        //    return str.ToString();
+        //}
+
+        //private static byte[] AppendByteArrays(byte[] array1, byte[] array2)
+        //{
+        //    byte[] array3 = new byte[array1.Length + array2.Length];
+
+        //    //append first array
+        //    for (int i = 0; i < array1.Length; i++)
+        //    {
+        //        array3[i] = array1[i];
+        //    }
+
+        //    //append 2nd array
+        //    for (int i = array1.Length; i < array3.Length; i++)
+        //    {
+        //        array3[i] = array2[i - array1.Length];
+        //    }
+
+        //    return array3;
+        //}
+
+        //private static byte[] Serialize(object obj)
+        //{
+        //    if (obj == null) return null;
+
+        //    BinaryFormatter bf = new BinaryFormatter();
+        //    using (MemoryStream ms = new MemoryStream())
+        //    {
+        //        bf.Serialize(ms, obj);
+        //        return ms.ToArray();
+        //    }
+        //}
+
+        //private static Object Deserialize(byte[] bytes)
+        //{
+        //    using (MemoryStream ms = new MemoryStream())
+        //    {
+        //        BinaryFormatter bf = new BinaryFormatter();
+        //        ms.Write(bytes, 0, bytes.Length);
+        //        ms.Seek(0, SeekOrigin.Begin);
+        //        return bf.Deserialize(ms);
+        //    }
+        //}
+    }
+
+    [Serializable()]
+    public class Auction
+    {
+        public string secret { get; set; }
+        public uint startTime { get; set; }
+        public uint endOfBidding { get; set; }
+        public uint endOfRevealing { get; set; }
+        public uint endOfResulting { get; set; }
+
+        public BigInteger reservePrice { get; set; }
+        public BigInteger highestBid { get; set; }
+        public BigInteger secondBid { get; set; }
+        public byte[] higherBidder { get; set; }
+        public bool hasResulted { get; set; }
+
+        public List<Bidder> bidders;
+
+        public Auction(string secret, uint startTime, int durationBidding, int durationRevealing, int durationResulting, BigInteger reservePrice, byte[] higherBidder)
         {
-            StringBuilder str = new StringBuilder();
-            foreach (byte b in hash)
+            this.secret = secret;
+            this.startTime = startTime;
+            this.endOfBidding = startTime + (uint)durationBidding;
+            this.endOfRevealing = startTime + (uint)durationBidding + (uint)durationRevealing;
+            this.endOfResulting = startTime + (uint)durationBidding + (uint)durationRevealing + (uint)durationResulting;
+
+            this.reservePrice = reservePrice;
+            this.highestBid = reservePrice;
+            this.secondBid = reservePrice;
+
+            this.higherBidder = higherBidder;
+            bidders = new List<Bidder>();
+            hasResulted = false;
+        }
+
+        public void ConfirmReveal(byte[] address)
+        {
+            bidders[GetBidderIndex(address)].hasRevealed = true;
+        }
+
+        public void SetBiderHash(byte[] address, string hash)
+        {
+            bidders[GetBidderIndex(address)].hash = hash;
+        }
+
+        public void SetBiderStake(byte[] address, int stake)
+        {
+            bidders[GetBidderIndex(address)].stake = stake;
+        }
+
+        public int GetBiderStake(byte[] address)
+        {
+            return bidders[GetBidderIndex(address)].stake;
+        }
+
+        public bool AnnounceBidder(byte[] address)
+        {
+            if (GetBidderIndex(address) != -1) return false;
+            bidders.Add(new Bidder(address));
+            return true;
+        }
+
+        private int GetBidderIndex(byte[] address)
+        {
+            for (int i = 0; i < bidders.Count; i++)
             {
-                str.Append(b.ToString("X2"));
+                if (CompareByteArrays(bidders[i].address, address)) return i;
             }
-            return str.ToString();
+
+            return -1;
         }
 
-        private static byte[] AppendByteArrays(byte[] array1, byte[] array2)
+        public string GetBidderHash(byte[] address)
         {
-            byte[] array3 = new byte[array1.Length + array2.Length];
+            for (int i = 0; i < bidders.Count; i++)
+            {
+                if (CompareByteArrays(bidders[i].address, address)) return bidders[i].hash;
+            }
 
-            //append first array
+            return null;
+        }
+
+        private bool CompareByteArrays(byte[] array1, byte[] array2)
+        {
+            if (array1.Length != array2.Length) return false;
+
             for (int i = 0; i < array1.Length; i++)
             {
-                array3[i] = array1[i];
+                if (array1[i] != array2[i]) return false;
             }
 
-            //append 2nd array
-            for (int i = array1.Length; i < array3.Length; i++)
-            {
-                array3[i] = array2[i - array1.Length];
-            }
-
-            return array3;
+            return true;
         }
+    }
 
-        private static byte[] Serialize(object obj)
+    [Serializable()]
+    public class Bidder
+    {
+        public byte[] address { get; set; }
+        public int stake { get; set; }
+        public string hash { get; set; }
+        public bool hasRevealed { get; set; }
+        public bool hasAnnounced { get; set; }
+
+
+        public Bidder(byte[] address)
         {
-            if (obj == null) return null;
-
-            BinaryFormatter bf = new BinaryFormatter();
-            using (MemoryStream ms = new MemoryStream())
-            {
-                bf.Serialize(ms, obj);
-                return ms.ToArray();
-            }
-        }
-
-        private static Object Deserialize(byte[] bytes)
-        {
-            using (MemoryStream ms = new MemoryStream())
-            {
-                BinaryFormatter bf = new BinaryFormatter();
-                ms.Write(bytes, 0, bytes.Length);
-                ms.Seek(0, SeekOrigin.Begin);
-                return bf.Deserialize(ms);
-            }
+            this.address = address;
+            this.hasAnnounced = true;
         }
     }
 }
