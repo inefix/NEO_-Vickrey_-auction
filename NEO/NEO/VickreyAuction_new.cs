@@ -13,7 +13,7 @@ using System.Collections.Generic;
 
 namespace NEO
 {
-    public class VickreyAuction : SmartContract
+    public class VickreyAuction_new : SmartContract
     {
         private static readonly byte[] Owner = "AK2nJJpJr6o664CWJKi1QRXjqeic2zRp8y".ToScriptHash(); //Owner Address
         private static readonly BigInteger TotalSupplyValue = 100000000000;     //1000 VNEO
@@ -43,19 +43,9 @@ namespace NEO
             {
                 if (method == "BalanceOf") return BalanceOf((byte[])args[0]);
 
-                //if (method == "Decimals") return Decimals();
-
                 if (method == "Deploy") return Deploy();
 
-                //if (method == "Name") return Name();
-
-                //if (method == "Symbol") return Symbol();
-
-                //if (method == "SupportedStandards") return SupportedStandards();
-
                 if (method == "TotalSupply") return TotalSupply();
-
-                //if (method == "Transfer") return Transfer((byte[])args[0], (byte[])args[1], (BigInteger)args[2], ExecutionEngine.CallingScriptHash);
 
                 if (method == "Init") return Init((string)args[0], (int)args[1], (int)args[2], (int)args[3], (int)args[4]);
 
@@ -63,21 +53,11 @@ namespace NEO
 
                 if (method == "Bid") return Bid((byte[])args[0], (string)args[1]);
 
-                //if (method == "Claim") return Claim();
-
                 if (method == "Result") return Result((byte[])args[0]);
 
                 if (method == "End") return End();
 
                 if (method == "Reveal") return Reveal((byte[])args[0], (int)args[1], (int)args[2]);
-
-                //if (method == "Withdraw") return Withdraw();
-
-                //if (method == "GetReceiver") return GetReceiver();
-
-                //if (method == "GetSender") return GetSender();
-
-                //if (method == "GetTime") return GetCurrentTime();
 
                 if (method == "GenerateHash") return GenerateSHA256((int)args[0], (int)args[1]);
             }
@@ -117,33 +97,40 @@ namespace NEO
             if (!Runtime.CheckWitness(Owner)) return false;
 
             //Auction
-            Auction auction = new Auction(secret, Runtime.Time, durationBidding, durationReveal, durationResulting, reservePrice, Owner);
+            //Auction auction = new Auction(secret, Runtime.Time, durationBidding, durationReveal, durationResulting, reservePrice, Owner);
             //Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
             //Storage.Put(Storage.CurrentContext, "auction", Helper.Serialize(auction));
-            Storage.Put("auction", Helper.Serialize(auction));
+
+            Storage.Put("secret", secret);
+            Storage.Put("reservePrice", reservePrice);
+            Storage.Put("endOfBidding", Runtime.Time + (uint)durationBidding);
+            Storage.Put("endOfRevealing", durationBidding + durationReveal);
+            Storage.Put("endOfResulting", durationReveal + durationResulting);
+            Storage.Put("highestBid", reservePrice);
+            Storage.Put("secondBid", reservePrice);
+            Storage.Put("higherBidder", Owner);
+            Storage.Put("hasResulted", 0);
+
+            //Storage.Put("auction", Helper.Serialize(auction));
             return true;
         }
 
         private static bool Announce(byte[] address)
         {
             if (Runtime.CheckWitness(Owner)) return false;
-            Runtime.Notify("0");
             //Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
-            Auction auction = (Auction)Helper.Deserialize(Storage.Get("auction"));
-            Runtime.Notify("1");
+            //Auction auction = (Auction)Helper.Deserialize(Storage.Get("auction"));
             uint now = Runtime.Time;
-            Runtime.Notify("11");
-            uint test = auction.endOfBidding;
-            Runtime.Notify("12");
-            if (now >= test) return false;
-            Runtime.Notify("2");
-            if (!auction.AnnounceBidder(address)) return false;
-            Runtime.Notify("3");
+            uint endOfBidding = (uint)BytesToBigInteger(Storage.Get("endOfBidding"));
+            if (now >= endOfBidding) return false;
+
+            //if (!auction.AnnounceBidder(address)) return false;
+            StorageMap announceBidder = Storage.CurrentContext.CreateMap(nameof(announceBidder));
+            if ((int)BytesToBigInteger(announceBidder.Get(address)) == 1) return false;
+            announceBidder.Put(address, 1);
+
             Transferred(null, address, 1000);
-            Runtime.Notify("4");
             //Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
-            Storage.Put("auction", Helper.Serialize(auction));
-            Runtime.Notify("5");
             Storage.Put("totalSupply", BytesToBigInteger(Storage.Get("totalSupply")) + 1000);
             return true;
         }
@@ -153,12 +140,17 @@ namespace NEO
             if (Runtime.CheckWitness(Owner)) return false;
 
             //Deserialize auction
-            Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
-            if (Runtime.Time >= auction.endOfBidding) return false;
+            //Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
+
+            uint endOfBidding = (uint)BytesToBigInteger(Storage.Get("endOfBidding"));
+            if (Runtime.Time >= endOfBidding) return false;
 
             //Store bidder's info
-            auction.SetBiderHash(bidderAddress, hash);
-            Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
+            //auction.SetBiderHash(bidderAddress, hash);
+            //Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
+
+            StorageMap hashAdd = Storage.CurrentContext.CreateMap(nameof(hashAdd));
+            hashAdd.Put(bidderAddress, hash);
 
             return true;
         }
@@ -166,55 +158,77 @@ namespace NEO
         private static bool Reveal(byte[] senderAddress, int stake, int nonce)
         {
             //Get auction
-            Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
+            //Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
             uint now = Runtime.Time;
-            if (now < auction.endOfBidding || now >= auction.endOfRevealing) return false;
+            uint endOfBidding = (uint)BytesToBigInteger(Storage.Get("endOfBidding"));
+            uint endOfRevealing = (uint)BytesToBigInteger(Storage.Get("endOfRevealing"));
+            if (now < endOfBidding || now >= endOfRevealing) return false;
 
             //Get bidder's hash
-            string hash = auction.GetBidderHash(senderAddress);
+            //string hash = auction.GetBidderHash(senderAddress);
+            StorageMap hashAdd = Storage.CurrentContext.CreateMap(nameof(hashAdd));
+            string hash = BytesToString(hashAdd.Get(senderAddress));
             if (hash == null) return false;
 
             //Compute hash and compare
             string generatedHash = GenerateSHA256(stake, nonce);
             if (hash != generatedHash) return false;
 
-            auction.SetBiderStake(senderAddress, stake);
+            //auction.SetBiderStake(senderAddress, stake);
+            StorageMap biderStake = Storage.CurrentContext.CreateMap(nameof(biderStake));
+            biderStake.Put(senderAddress, stake);
 
             //Confirm reveal of bidder
-            auction.ConfirmReveal(senderAddress);
+            //auction.ConfirmReveal(senderAddress);
+            StorageMap confirmReveal = Storage.CurrentContext.CreateMap(nameof(confirmReveal));
+            confirmReveal.Put(senderAddress, 1);
             Transferred(senderAddress, null, stake);
 
-            if (stake > auction.highestBid)
+            int highestBid = (int)BytesToBigInteger(Storage.Get("highestBid"));
+            int secondBid = (int)BytesToBigInteger(Storage.Get("secondBid"));
+            if (stake > highestBid)
             {
-                auction.secondBid = auction.highestBid;
-                auction.highestBid = stake;
-                auction.higherBidder = senderAddress;
+                //auction.secondBid = auction.highestBid;
+                //auction.highestBid = stake;
+                //auction.higherBidder = senderAddress;
+                Storage.Put("secondBid", highestBid);
+                Storage.Put("highestBid", stake);
+                Storage.Put("higherBidder", senderAddress);
             }
-            else if (stake > auction.secondBid)
+            else if (stake > secondBid)
             {
-                auction.secondBid = stake;
+                //auction.secondBid = stake;
+                Storage.Put("secondBid", stake);
             }
-            Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
+            //Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
 
             return true;
         }
 
         private static string Result(byte[] senderAddress)
         {
-            Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
+            //Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
             uint now = Runtime.Time;
-            if (now < auction.endOfRevealing || now >= auction.endOfResulting) return "wait";
-            if (Runtime.CheckWitness(auction.higherBidder))
+            uint endOfResulting = (uint)BytesToBigInteger(Storage.Get("endOfResulting"));
+            uint endOfRevealing = (uint)BytesToBigInteger(Storage.Get("endOfRevealing"));
+            if (now < endOfRevealing || now >= endOfResulting) return "wait";
+            byte[] higherBidder = Storage.Get("higherBidder");
+            if (Runtime.CheckWitness(higherBidder))
             {
                 //create variable to know if highBidder has called result
-                auction.hasResulted = true;
-                Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
-                Transferred(auction.higherBidder, Owner, auction.secondBid);
-                return auction.secret;
+                //auction.hasResulted = true;
+                //Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
+                Storage.Put("hasResulted", 1);
+                int secondBid = (int)BytesToBigInteger(Storage.Get("secondBid"));
+                Transferred(higherBidder, Owner, secondBid);
+                string secret = BytesToString(Storage.Get("secret"));
+                return secret;
             }
             else
             {
-                Transferred(null, senderAddress, auction.GetBiderStake(senderAddress));
+                StorageMap biderStake = Storage.CurrentContext.CreateMap(nameof(biderStake));
+                //Transferred(null, senderAddress, auction.GetBiderStake(senderAddress));
+                Transferred(null, senderAddress, BytesToBigInteger(biderStake.Get(senderAddress)));
             }
             return "true";
         }
@@ -222,11 +236,16 @@ namespace NEO
         private static bool End()
         {
             if (!Runtime.CheckWitness(Owner)) return false;
-            Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
-            if (Runtime.Time < auction.endOfResulting) return false;
-            if (auction.hasResulted == false)
+            //Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
+            uint endOfResulting = (uint)BytesToBigInteger(Storage.Get("endOfResulting"));
+            if (Runtime.Time < endOfResulting) return false;
+            
+            int hasResulted = (int)BytesToBigInteger(Storage.Get("hasResulted"));
+            if (hasResulted == 0)
             {
-                Transferred(auction.higherBidder, Owner, auction.secondBid);
+                byte[] higherBidder = Storage.Get("higherBidder");
+                int secondBid = (int)BytesToBigInteger(Storage.Get("secondBid"));
+                Transferred(higherBidder, Owner, secondBid);
             }
             return true;
         }
@@ -282,141 +301,6 @@ namespace NEO
 
         //    return array3;
         //}
-
-        //private static byte[] Serialize(object obj)
-        //{
-        //    if (obj == null) return null;
-
-        //    BinaryFormatter bf = new BinaryFormatter();
-        //    using (MemoryStream ms = new MemoryStream())
-        //    {
-        //        bf.Serialize(ms, obj);
-        //        return ms.ToArray();
-        //    }
-        //}
-
-        //private static Object Deserialize(byte[] bytes)
-        //{
-        //    using (MemoryStream ms = new MemoryStream())
-        //    {
-        //        BinaryFormatter bf = new BinaryFormatter();
-        //        ms.Write(bytes, 0, bytes.Length);
-        //        ms.Seek(0, SeekOrigin.Begin);
-        //        return bf.Deserialize(ms);
-        //    }
-        //}
     }
 
-    //[Serializable()]
-    [Serializable]
-    public class Auction
-    {
-        public string secret { get; set; }
-        public uint startTime { get; set; }
-        public uint endOfBidding { get; set; }
-        public uint endOfRevealing { get; set; }
-        public uint endOfResulting { get; set; }
-
-        public BigInteger reservePrice { get; set; }
-        public BigInteger highestBid { get; set; }
-        public BigInteger secondBid { get; set; }
-        public byte[] higherBidder { get; set; }
-        public bool hasResulted { get; set; }
-
-        public List<Bidder> bidders;
-
-        public Auction(string secret, uint startTime, int durationBidding, int durationRevealing, int durationResulting, BigInteger reservePrice, byte[] higherBidder)
-        {
-            this.secret = secret;
-            this.startTime = startTime;
-            this.endOfBidding = startTime + (uint)durationBidding;
-            this.endOfRevealing = startTime + (uint)durationBidding + (uint)durationRevealing;
-            this.endOfResulting = startTime + (uint)durationBidding + (uint)durationRevealing + (uint)durationResulting;
-
-            this.reservePrice = reservePrice;
-            this.highestBid = reservePrice;
-            this.secondBid = reservePrice;
-
-            this.higherBidder = higherBidder;
-            bidders = new List<Bidder>();
-            hasResulted = false;
-        }
-
-        public void ConfirmReveal(byte[] address)
-        {
-            bidders[GetBidderIndex(address)].hasRevealed = true;
-        }
-
-        public void SetBiderHash(byte[] address, string hash)
-        {
-            bidders[GetBidderIndex(address)].hash = hash;
-        }
-
-        public void SetBiderStake(byte[] address, int stake)
-        {
-            bidders[GetBidderIndex(address)].stake = stake;
-        }
-
-        public int GetBiderStake(byte[] address)
-        {
-            return bidders[GetBidderIndex(address)].stake;
-        }
-
-        public bool AnnounceBidder(byte[] address)
-        {
-            if (GetBidderIndex(address) != -1) return false;
-            bidders.Add(new Bidder(address));
-            return true;
-        }
-
-        private int GetBidderIndex(byte[] address)
-        {
-            for (int i = 0; i < bidders.Count; i++)
-            {
-                if (CompareByteArrays(bidders[i].address, address)) return i;
-            }
-
-            return -1;
-        }
-
-        public string GetBidderHash(byte[] address)
-        {
-            for (int i = 0; i < bidders.Count; i++)
-            {
-                if (CompareByteArrays(bidders[i].address, address)) return bidders[i].hash;
-            }
-
-            return null;
-        }
-
-        private bool CompareByteArrays(byte[] array1, byte[] array2)
-        {
-            if (array1.Length != array2.Length) return false;
-
-            for (int i = 0; i < array1.Length; i++)
-            {
-                if (array1[i] != array2[i]) return false;
-            }
-
-            return true;
-        }
-    }
-
-    //[Serializable()]
-    [Serializable]
-    public class Bidder
-    {
-        public byte[] address { get; set; }
-        public int stake { get; set; }
-        public string hash { get; set; }
-        public bool hasRevealed { get; set; }
-        public bool hasAnnounced { get; set; }
-
-
-        public Bidder(byte[] address)
-        {
-            this.address = address;
-            this.hasAnnounced = true;
-        }
-    }
 }
