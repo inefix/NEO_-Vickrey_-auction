@@ -107,6 +107,7 @@ namespace NEO
             Storage.Put("secondBid", reservePrice);
             Storage.Put("higherBidder", Owner);
             Storage.Put("hasResulted", 0);
+            Storage.Put("bid", 0);
 
             //Storage.Put("auction", Helper.Serialize(auction));
             return true;
@@ -209,12 +210,14 @@ namespace NEO
                 Storage.Put("secondBid", highestBid);
                 Storage.Put("highestBid", stake);
                 Storage.Put("higherBidder", senderAddress);
+                Storage.Put("bid", 1);
                 Runtime.Notify("6");
             }
             else if (stake > secondBid)
             {
                 //auction.secondBid = stake;
                 Storage.Put("secondBid", stake);
+                Storage.Put("bid", 1);
                 Runtime.Notify("7");
             }
             //Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
@@ -255,8 +258,11 @@ namespace NEO
             if (!Runtime.CheckWitness(Owner)) return false;
             //Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
             uint endOfResulting = (uint)BytesToBigInteger(Storage.Get("endOfResulting"));
+            int bid = (int)BytesToBigInteger(Storage.Get("bid"));
             if (Runtime.Time < endOfResulting) return false;
-            
+
+            if (bid == 0) return false;
+
             int hasResulted = (int)BytesToBigInteger(Storage.Get("hasResulted"));
             if (hasResulted == 0)
             {
