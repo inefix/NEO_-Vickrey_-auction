@@ -17,8 +17,8 @@ namespace NEO
         [DisplayName("symbol")]
         public static string Symbol() => "VNEO"; //symbol of the token
 
-        //[DisplayName("decimals")]
-        //public static byte Decimals() => 8;
+        [DisplayName("decimals")]
+        public static byte Decimals() => 0;
 
         [DisplayName("supportedStandards")]
         public static string[] SupportedStandards() => new string[] { "NEP-5", "NEP-7", "NEP-10" };
@@ -91,23 +91,24 @@ namespace NEO
 
         private static bool Init(string secret, BigInteger reservePrice, int durationBidding, int durationReveal, int durationResulting)
         {
+            Runtime.Notify("0");
             if (!Runtime.CheckWitness(Owner)) return false;
-
+            Runtime.Notify("1");
             //Auction
             //Auction auction = new Auction(secret, Runtime.Time, durationBidding, durationReveal, durationResulting, reservePrice, Owner);
             //Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
             //Storage.Put(Storage.CurrentContext, "auction", Helper.Serialize(auction));
 
             Storage.Put("secret", secret);
-            Storage.Put("reservePrice", reservePrice);
+            //Storage.Put("reservePrice", reservePrice);
             Storage.Put("endOfBidding", Runtime.Time + durationBidding);
             Storage.Put("endOfRevealing", Runtime.Time + durationBidding + durationReveal);
             Storage.Put("endOfResulting", Runtime.Time + durationBidding + durationReveal + durationResulting);
             Storage.Put("highestBid", reservePrice);
             Storage.Put("secondBid", reservePrice);
             Storage.Put("higherBidder", Owner);
+            Storage.Put("bidder", 0);
             Storage.Put("hasResulted", 0);
-            Storage.Put("bid", 0);
 
             //Storage.Put("auction", Helper.Serialize(auction));
             return true;
@@ -132,13 +133,14 @@ namespace NEO
             //Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
             Storage.Put("totalSupply", BytesToBigInteger(Storage.Get("totalSupply")) + 1000);
             Runtime.Notify("3");
+
             //Issue NEP-5 asset
             StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
             var amount = asset.Get(address).AsBigInteger(); //0.1
             asset.Put(address, amount + 1000); //1
             Runtime.Notify("4");
             Transferred(null, address, 1000);
-            Runtime.Notify("5");
+
             return true;
         }
 
@@ -152,6 +154,10 @@ namespace NEO
 
             uint endOfBidding = (uint)BytesToBigInteger(Storage.Get("endOfBidding"));
             if (Runtime.Time >= endOfBidding) return false;
+
+            StorageMap bidded = Storage.CurrentContext.CreateMap(nameof(bidded));
+            if ((int)BytesToBigInteger(bidded.Get(bidderAddress)) == 1) return false;
+            bidded.Put(bidderAddress, 1);
 
             //Store bidder's info
             //auction.SetBiderHash(bidderAddress, hash);
@@ -175,33 +181,46 @@ namespace NEO
             if (now < endOfBidding || now >= endOfRevealing) return false;      //pass if 0 || 0
             Runtime.Notify("1");
 
+            StorageMap revealed = Storage.CurrentContext.CreateMap(nameof(revealed));
+            if ((int)BytesToBigInteger(revealed.Get(senderAddress)) == 1) return false;
+            revealed.Put(senderAddress, 1);
+
             //Get bidder's hash
             //string hash = auction.GetBidderHash(senderAddress);
             StorageMap hashAdd = Storage.CurrentContext.CreateMap(nameof(hashAdd));
             byte[] hash = hashAdd.Get(senderAddress);
             if (hash == null) return false;
-            Runtime.Notify("2");
+            Runtime.Notify("3");
 
             //Compute hash and compare
             //byte[] generatedHash = GenerateSHA256(stake, nonce);
             //if (hash != generatedHash) return false;
             if (!CompareHash(stake, nonce, hash)) return false;
-            Runtime.Notify("3");
+            Runtime.Notify("4");
+
+            //transfer NEP-5 asset
+            StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
+            var amount = asset.Get(senderAddress).AsBigInteger();
+            if (amount >= stake)
+            {
+                asset.Put(senderAddress, amount - stake);
+            } else
+            {
+                stake = (int)amount;
+                asset.Put(senderAddress, 0);
+            }
+            Transferred(senderAddress, null, stake);
+            Runtime.Notify("2");
 
             //auction.SetBiderStake(senderAddress, stake);
             StorageMap biderStake = Storage.CurrentContext.CreateMap(nameof(biderStake));
             biderStake.Put(senderAddress, stake);
-            Runtime.Notify("4");
 
-            //Confirm reveal of bidder
-            //auction.ConfirmReveal(senderAddress);
-            StorageMap confirmReveal = Storage.CurrentContext.CreateMap(nameof(confirmReveal));
-            confirmReveal.Put(senderAddress, 1);
-            Transferred(senderAddress, null, stake);
             Runtime.Notify("5");
 
             int highestBid = (int)BytesToBigInteger(Storage.Get("highestBid"));
             int secondBid = (int)BytesToBigInteger(Storage.Get("secondBid"));
+            Runtime.Notify(stake);
             if (stake > highestBid)
             {
                 //auction.secondBid = auction.highestBid;
@@ -210,14 +229,16 @@ namespace NEO
                 Storage.Put("secondBid", highestBid);
                 Storage.Put("highestBid", stake);
                 Storage.Put("higherBidder", senderAddress);
-                Storage.Put("bid", 1);
+                Runtime.Notify("10");
+                Storage.Put("bidder", 1);
                 Runtime.Notify("6");
             }
             else if (stake > secondBid)
             {
                 //auction.secondBid = stake;
                 Storage.Put("secondBid", stake);
-                Storage.Put("bid", 1);
+                Runtime.Notify("9");
+                Storage.Put("bidder", 1);
                 Runtime.Notify("7");
             }
             //Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
@@ -232,7 +253,13 @@ namespace NEO
             uint endOfResulting = (uint)BytesToBigInteger(Storage.Get("endOfResulting"));
             uint endOfRevealing = (uint)BytesToBigInteger(Storage.Get("endOfRevealing"));
             if (now < endOfRevealing || now >= endOfResulting) return "wait";
+
+            StorageMap resulted = Storage.CurrentContext.CreateMap(nameof(resulted));
+            if ((int)BytesToBigInteger(resulted.Get(senderAddress)) == 1) return "already resulted";
+            resulted.Put(senderAddress, 1);
+
             byte[] higherBidder = Storage.Get("higherBidder");
+            StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
             if (Runtime.CheckWitness(higherBidder))
             {
                 //create variable to know if highBidder has called result
@@ -240,7 +267,19 @@ namespace NEO
                 //Storage.Put(Storage.CurrentContext, "auction", auction.Serialize());
                 Storage.Put("hasResulted", 1);
                 int secondBid = (int)BytesToBigInteger(Storage.Get("secondBid"));
+
+                //transfer to the Owner
+                var amount = asset.Get(Owner).AsBigInteger();
+                asset.Put(Owner, amount + secondBid);
+                Runtime.Notify("4");
                 Transferred(null, Owner, secondBid);
+
+                //transfer of the difference to the higherBidder
+                int highestBid = (int)BytesToBigInteger(Storage.Get("highestBid"));
+                asset.Put(Owner, amount + highestBid - secondBid); //1
+                Runtime.Notify("4");
+                Transferred(null, higherBidder, amount + highestBid - secondBid);
+
                 string secret = BytesToString(Storage.Get("secret"));
                 return secret;
             }
@@ -248,6 +287,9 @@ namespace NEO
             {
                 StorageMap biderStake = Storage.CurrentContext.CreateMap(nameof(biderStake));
                 //Transferred(null, senderAddress, auction.GetBiderStake(senderAddress));
+
+                var amount = asset.Get(senderAddress).AsBigInteger();
+                asset.Put(Owner, amount + BytesToBigInteger(biderStake.Get(senderAddress)));
                 Transferred(null, senderAddress, BytesToBigInteger(biderStake.Get(senderAddress)));
             }
             return "true";
@@ -258,17 +300,31 @@ namespace NEO
             if (!Runtime.CheckWitness(Owner)) return false;
             //Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
             uint endOfResulting = (uint)BytesToBigInteger(Storage.Get("endOfResulting"));
-            int bid = (int)BytesToBigInteger(Storage.Get("bid"));
             if (Runtime.Time < endOfResulting) return false;
 
-            if (bid == 0) return false;
+            if ((int)BytesToBigInteger(Storage.Get("bidder")) == 1) return false;
+
+            if ((int)BytesToBigInteger(Storage.Get("hasEnded")) == 1) return false;
+            Storage.Put("hasEnded", 1);
 
             int hasResulted = (int)BytesToBigInteger(Storage.Get("hasResulted"));
             if (hasResulted == 0)
             {
                 //byte[] higherBidder = Storage.Get("higherBidder");
                 int secondBid = (int)BytesToBigInteger(Storage.Get("secondBid"));
+
+                //transfer to the Owner
+                StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
+                var amount = asset.Get(Owner).AsBigInteger();
+                asset.Put(Owner, amount + secondBid);
                 Transferred(null, Owner, secondBid);
+
+                //transfer of the difference to the higherBidder
+                int highestBid = (int)BytesToBigInteger(Storage.Get("highestBid"));
+                byte[] higherBidder = Storage.Get("higherBidder");
+                asset.Put(Owner, amount + highestBid - secondBid);
+                Runtime.Notify("4");
+                Transferred(null, higherBidder, amount + highestBid - secondBid);
             }
             return true;
         }
