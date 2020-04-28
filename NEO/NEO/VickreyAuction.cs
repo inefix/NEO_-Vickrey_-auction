@@ -11,20 +11,46 @@ namespace NEO
         private static readonly byte[] Owner = "AK2nJJpJr6o664CWJKi1QRXjqeic2zRp8y".ToScriptHash(); //Owner Address
         private static readonly BigInteger TotalSupplyValue = 1000;     //1000 VNEO
 
+        /// <summary>
+        /// Return the token's name
+        /// </summary>
+        /// <returns>string</returns>
         [DisplayName("Name")]
         public static string Name() => "VNEO"; //name of the token
 
+        /// <summary>
+        /// Return the token's symbol
+        /// </summary>
+        /// <returns>string</returns>
         [DisplayName("Symbol")]
         public static string Symbol() => "VNEO"; //symbol of the token
 
+        /// <summary>
+        /// Return the token's number of decimals
+        /// </summary>
+        /// <returns>byte</returns>
         [DisplayName("Decimals")]
         public static byte Decimals() => 0;
 
+        /// <summary>
+        /// Returns the Supported standards
+        /// </summary>
+        /// <returns>string</returns>
         [DisplayName("SupportedStandards")]
-        public static string[] SupportedStandards() => new string[] { "NEP-5", "NEP-7", "NEP-10" };
+       public static string[] SupportedStandards() => new string[] { "NEP-5", "NEP-7", "NEP-10" };
 
+        /// <summary>
+        /// Transfer token
+        /// </summary>
         [DisplayName("Transfer")]
         public static event Action<byte[], byte[], BigInteger> Transferred;
+
+        /// <summary>
+        /// Smart contract entry point
+        /// </summary>
+        /// <param name="method">method to call</param>
+        /// <param name="args">array with required params</param>
+        /// <returns>object</returns>
 
         public static object Main(string method, object[] args)
         {
@@ -59,6 +85,11 @@ namespace NEO
             return false;
         }
 
+        /// <summary>
+        /// Returns the token balance of the account
+        /// </summary>
+        /// <param name="account">20-byte address</param>
+        /// <returns>BigInteger</returns>
         [DisplayName("BalanceOf")]
         public static BigInteger BalanceOf(byte[] account)
         {
@@ -70,6 +101,10 @@ namespace NEO
             return asset.Get(account).AsBigInteger();
         }
 
+        /// <summary>
+        /// Returns the total token supply deployed in the system
+        /// </summary>
+        /// <returns>BigInteger</returns>
         [DisplayName("TotalSupply")]
         public static BigInteger TotalSupply()
         {
@@ -77,6 +112,10 @@ namespace NEO
             return contract.Get("totalSupply").AsBigInteger();
         }
 
+        /// <summary>
+        /// Deploy the token in the system and set the total supply value
+        /// </summary>
+        /// <returns>bool</returns>
         [DisplayName("Deploy")]
         public static bool Deploy()
         {
@@ -89,6 +128,15 @@ namespace NEO
             return true;
         }
 
+        /// <summary>
+        /// Initialize new Vickrey Auction
+        /// </summary>
+        /// <param name="secret">secret auctioned</param>
+        /// <param name="reservePrice">minimum price</param>
+        /// <param name="durationBidding">duration of bidding period in seconds</param>
+        /// <param name="durationReveal">duration of reveal period in seconds</param>
+        /// <param name="durationResulting"duration of resulting period in seconds></param>
+        /// <returns>string</returns>
         [DisplayName("Init")]
         private static string Init(string secret, BigInteger reservePrice, int durationBidding, int durationReveal, int durationResulting)
         {
@@ -107,6 +155,11 @@ namespace NEO
             return "success";
         }
 
+        /// <summary>
+        /// Announce the intention of bidding
+        /// </summary>
+        /// <param name="address">bidder's address</param>
+        /// <returns>string</returns>
         [DisplayName("Announce")]
         private static string Announce(byte[] address)
         {
@@ -132,6 +185,12 @@ namespace NEO
             return "success";
         }
 
+        /// <summary>
+        /// Bid
+        /// </summary>
+        /// <param name="bidderAddress">bidder's address</param>
+        /// <param name="hash">hash create from stake and nonce</param>
+        /// <returns>string</returns>
         [DisplayName("Bid")]
         private static string Bid(byte[] bidderAddress, byte[] hash)
         {
@@ -151,6 +210,13 @@ namespace NEO
             return "success";
         }
 
+        /// <summary>
+        /// Reveal the bid previously done
+        /// </summary>
+        /// <param name="senderAddress">bidder's address</param>
+        /// <param name="stake">amount bidden</param>
+        /// <param name="nonce">nonce</param>
+        /// <returns>string</returns>
         [DisplayName("Reveal")]
         private static string Reveal(byte[] senderAddress, int stake, int nonce)
         {
@@ -208,6 +274,11 @@ namespace NEO
             return "success";
         }
 
+        /// <summary>
+        /// Get the result of the auction depending on the address
+        /// </summary>
+        /// <param name="senderAddress">bidder's address</param>
+        /// <returns>string</returns>
         [DisplayName("Result")]
         private static string Result(byte[] senderAddress)
         {
@@ -257,6 +328,11 @@ namespace NEO
             }
         }
 
+        /// <summary>
+        /// Call end of the auction by the owner
+        /// If highest bidder hasn't called the result method, withdraw amount of token
+        /// </summary>
+        /// <returns>string</returns>
         [DisplayName("End")]
         private static string End()
         {
@@ -291,6 +367,12 @@ namespace NEO
             return "success";
         }
 
+        /// <summary>
+        /// Generate the hash with stake and nonce
+        /// </summary>
+        /// <param name="stake">amount bidden</param>
+        /// <param name="nonce">nonce</param>
+        /// <returns>byte[]</returns>
         [DisplayName("GenerateHash")]
         private static byte[] GenerateHash(int stake, int nonce)
         {
@@ -309,6 +391,13 @@ namespace NEO
             return hash;
         }
 
+        /// <summary>
+        /// Compare hash in params with stake and nonce
+        /// </summary>
+        /// <param name="stake">amount</param>
+        /// <param name="nonce">nonce</param>
+        /// <param name="hash">previously computed hash</param>
+        /// <returns>bool</returns>
         private static bool CompareHash(int stake, int nonce, byte[] hash)
         {
             //Compute hash and compare
@@ -318,8 +407,19 @@ namespace NEO
             return true;
         }
 
+        /// <summary>
+        /// Convert byte array to string
+        /// </summary>
+        /// <param name="data"></param>
+        /// <returns>string</returns>
         private static string BytesToString(byte[] data) => data.AsString();
 
+
+        /// <summary>
+        /// Convert byte array to BigInteger
+        /// </summary>
+        /// <param name="data"></param>
+        /// <returns>BigInteger</returns>
         private static BigInteger BytesToBigInteger(byte[] data) => data.AsBigInteger();
 
     }
