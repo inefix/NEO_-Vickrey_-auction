@@ -229,9 +229,9 @@ namespace NEO
                 Storage.Put("secondBid", highestBid);
                 Storage.Put("highestBid", stake);
                 Storage.Put("higherBidder", senderAddress);
-                Runtime.Notify("10");
                 Storage.Put("bidder", 1);
                 Runtime.Notify("6");
+                Runtime.Notify(highestBid);
             }
             else if (stake > secondBid)
             {
@@ -276,9 +276,10 @@ namespace NEO
 
                 //transfer of the difference to the higherBidder
                 int highestBid = (int)BytesToBigInteger(Storage.Get("highestBid"));
-                asset.Put(Owner, amount + highestBid - secondBid); //1
+                var amount2 = asset.Get(higherBidder).AsBigInteger();
+                asset.Put(higherBidder, amount2 + highestBid - secondBid); //1
                 Runtime.Notify("4");
-                Transferred(null, higherBidder, amount + highestBid - secondBid);
+                Transferred(null, higherBidder, highestBid - secondBid);
 
                 string secret = BytesToString(Storage.Get("secret"));
                 return secret;
@@ -297,12 +298,16 @@ namespace NEO
 
         private static bool End()
         {
+            Runtime.Notify("0");
             if (!Runtime.CheckWitness(Owner)) return false;
+            Runtime.Notify("1");
             //Auction auction = (Auction)Storage.Get(Storage.CurrentContext, "auction").Deserialize();
             uint endOfResulting = (uint)BytesToBigInteger(Storage.Get("endOfResulting"));
             if (Runtime.Time < endOfResulting) return false;
+            Runtime.Notify("2");
 
-            if ((int)BytesToBigInteger(Storage.Get("bidder")) == 1) return false;
+            if ((int)BytesToBigInteger(Storage.Get("bidder")) == 0) return false;
+            Runtime.Notify("3");
 
             if ((int)BytesToBigInteger(Storage.Get("hasEnded")) == 1) return false;
             Storage.Put("hasEnded", 1);
@@ -318,14 +323,18 @@ namespace NEO
                 var amount = asset.Get(Owner).AsBigInteger();
                 asset.Put(Owner, amount + secondBid);
                 Transferred(null, Owner, secondBid);
+                Runtime.Notify("4");
 
                 //transfer of the difference to the higherBidder
                 int highestBid = (int)BytesToBigInteger(Storage.Get("highestBid"));
                 byte[] higherBidder = Storage.Get("higherBidder");
-                asset.Put(Owner, amount + highestBid - secondBid);
+                var amount2 = asset.Get(higherBidder).AsBigInteger();
+                asset.Put(higherBidder, amount2 + highestBid - secondBid);
                 Runtime.Notify("4");
-                Transferred(null, higherBidder, amount + highestBid - secondBid);
+                Transferred(null, higherBidder, highestBid - secondBid);
+                Runtime.Notify("5");
             }
+            Runtime.Notify("6");
             return true;
         }
 
