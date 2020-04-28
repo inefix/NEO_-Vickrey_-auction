@@ -51,7 +51,6 @@ namespace NEO
         /// <param name="method">method to call</param>
         /// <param name="args">array with required params</param>
         /// <returns>object</returns>
-
         public static object Main(string method, object[] args)
         {
             if (Runtime.Trigger == TriggerType.Verification)
@@ -254,6 +253,7 @@ namespace NEO
             }
             Transferred(senderAddress, null, stake);
 
+            // store the stake related to the address
             StorageMap biderStake = Storage.CurrentContext.CreateMap(nameof(biderStake));
             biderStake.Put(senderAddress, stake);
 
@@ -296,6 +296,7 @@ namespace NEO
 
             byte[] higherBidder = Storage.Get("higherBidder");
             StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
+
             if (Runtime.CheckWitness(higherBidder))
             {
                 Storage.Put("hasResulted", 1);
@@ -346,6 +347,7 @@ namespace NEO
             if ((int)BytesToBigInteger(Storage.Get("hasEnded")) == 1) return "can only End once";
             Storage.Put("hasEnded", 1);
 
+            //if the higherBidder has not resulted
             int hasResulted = (int)BytesToBigInteger(Storage.Get("hasResulted"));
             if (hasResulted == 0)
             {
