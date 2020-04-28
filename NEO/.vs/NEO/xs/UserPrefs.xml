@@ -1,17 +1,11 @@
 ﻿<Properties>
-  <MonoDevelop.Ide.Workbench ActiveDocument="NEO/VickreyAuction_new.cs">
-    <Files>
-      <File FileName="NEO/VickreyAuction_new.cs" Line="1" Column="1" />
-      <File FileName="NEO/Auction.cs" Line="71" Column="6" />
-      <File FileName="NEO/Bidder.cs" Line="13" Column="1" />
-    </Files>
+  <MonoDevelop.Ide.Workbench>
     <Pads>
       <Pad Id="ProjectPad">
         <State name="__root__">
           <Node name="NEO" expanded="True">
             <Node name="NEO" expanded="True">
               <Node name="Dependencies" expanded="True" />
-              <Node name="VickreyAuction_new.cs" selected="True" />
             </Node>
           </Node>
         </State>
